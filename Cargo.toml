@@ -1,0 +1,7 @@
+[package]
+name = "diff"
+version = "0.1.0"
+authors = ["Casper Neo <casperneo@uchicago.edu>"]
+
+[dependencies]
+ndarray = "0.11.2"
