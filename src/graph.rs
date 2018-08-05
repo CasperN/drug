@@ -1,7 +1,6 @@
 // use std::cell::Ref;
-use ndarray::{Array, ArrayD, ArrayViewD, ArrayViewMutD, Zip};
+use ndarray::{Array, ArrayD, ArrayViewD, ArrayViewMutD};
 use optimizers::SGD;
-use std::cell::{RefCell, Ref, RefMut};
 use std::mem;
 // use node::{NodeTy, Node};
 
@@ -11,11 +10,11 @@ pub trait Operation {
     // Represents a differentiable function
 
     // Mutates Outputs in place based on Inputs
-    fn eval(&self, inputs: Vec<Ref<ArrayD<f32>>>) -> ArrayD<f32>;
+    fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32>;
 
     // Returns gradients of inputs wrt outputs
     // Note the inputs and output vectors should be the same length
-    fn grad(&self, inputs: Vec<Ref<ArrayD<f32>>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
+    fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
 }
 
 pub trait DataSet {
@@ -43,8 +42,8 @@ enum NodeTy {
 
 pub struct Node {
     variant: NodeTy,
-    value: RefCell<ArrayD<f32>>,
-    loss: RefCell<ArrayD<f32>>, // should be same shape as value, probably ignored by Inputs
+    value: ArrayD<f32>,
+    loss: ArrayD<f32>, // should be same shape as value, probably ignored by Inputs
 }
 
 impl Node {
@@ -53,8 +52,8 @@ impl Node {
             variant: NodeTy::Parameter {
                 optimizer: Box::new(SGD()),
             },
-            value: RefCell::new(Array::zeros([0; 4]).into_dyn()),
-            loss: RefCell::new(Array::zeros([0; 4]).into_dyn()),
+            value: Array::zeros([0; 4]).into_dyn(),
+            loss: Array::zeros([0; 4]).into_dyn(),
         }
     }
 }
@@ -76,16 +75,16 @@ impl Graph {
             mem::swap(&mut tmp, &mut self.nodes[i]);
 
             // Reset losses
-            tmp.loss.borrow_mut().mapv_inplace(|_| 0.0);
+            tmp.loss.mapv_inplace(|_| 0.0);
 
             // Update Values
             match tmp {
                 Node {
                     variant: NodeTy::Input { ref mut dataset },
-                    ref value,
+                    ref mut value,
                     ..
                 } => {
-                    value.replace(dataset.next());
+                    *value = dataset.next();
                 }
 
                 Node {
@@ -94,11 +93,11 @@ impl Graph {
                             ref mut inp,
                             ref mut op,
                         },
-                    ref value,
+                    ref mut value,
                     ..
                 } => {
                     let inputs = get_input_values(&inp, &self.nodes);
-                    value.replace(op.eval(inputs));
+                    *value = op.eval(inputs);
                 }
 
                 Node {
@@ -130,14 +129,11 @@ impl Graph {
                     ref loss,
                     ..
                 } => {
-                    let input_vals = get_input_values(&inp, &self.nodes);
-                    let loss = loss.borrow();
-                    let gradients = op.grad(input_vals, loss.view());
+                    let gradients = op.grad(get_input_values(&inp, &self.nodes), loss.view());
 
                     for (grad, j) in gradients.iter().zip(inp.iter()) {
                         // TODO make this support broadcasting
-                        let mut l = self.nodes[*j].loss.borrow_mut();
-                        l.zip_mut_with(grad, |l, g| *l = *l + g);
+                        self.nodes[*j].loss += grad;
                     }
                 }
 
@@ -146,9 +142,7 @@ impl Graph {
                     ref loss,
                     ref mut value,
                 } => {
-                    let loss = loss.borrow();
-                    let mut params = value.borrow_mut();
-                    optimizer.apply_gradient(loss.view(), params.view_mut());
+                    optimizer.apply_gradient(loss.view(), value.view_mut());
                 }
             }
 
@@ -157,10 +151,10 @@ impl Graph {
     }
 }
 
-fn get_input_values<'a>(indices: &Vec<Idx>, nodes: &'a Vec<Node>) -> Vec<Ref<'a, ArrayD<f32>>> {
+fn get_input_values<'a>(indices: &Vec<Idx>, nodes: &'a Vec<Node>) -> Vec<ArrayViewD<'a, f32>> {
     let mut vals = Vec::new();
     for i in indices.iter() {
-        vals.push(nodes[*i].value.borrow());
+        vals.push(nodes[*i].value.view());
     }
     vals
 }
