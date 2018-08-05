@@ -1,5 +1,5 @@
-use graph::Optimizer;
 use ndarray::{ArrayViewD, ArrayViewMutD, Zip};
+use node::Optimizer;
 
 pub struct SGD();
 

@@ -1,9 +1,8 @@
 extern crate ndarray;
 // extern crate rand;
 
-// mod node;
-
 pub mod graph;
+pub mod node;
 mod optimizers;
 
 #[cfg(test)]
