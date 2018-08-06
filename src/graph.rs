@@ -21,6 +21,8 @@ pub struct RuntimeNode {
     pub value: ArrayD<f32>,
     pub loss: ArrayD<f32>, // should be same shape as value, probably ignored by Inputs
 }
+// Shape information?
+
 impl RuntimeNode {
     fn new_tmp() -> Self {
         RuntimeNode {
@@ -93,10 +95,6 @@ impl Graph {
             // Need to borrow self.nodes to get inputs, this is fine as no node has itself as input
             let mut current_node = RuntimeNode::new_tmp();
             mem::swap(&mut current_node, &mut self.nodes[i]);
-
-            // Reset losses
-            current_node.loss.mapv_inplace(|_| 0.0);
-
             // Update Values
             match current_node {
                 RuntimeNode {
@@ -129,6 +127,8 @@ impl Graph {
                     ..
                 } => {}
             }
+            // reset losses
+            current_node.loss = Array::zeros(current_node.value.shape());
             mem::swap(&mut current_node, &mut self.nodes[i]);
         }
     }

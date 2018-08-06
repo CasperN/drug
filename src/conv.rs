@@ -77,7 +77,7 @@ impl Operation for Conv {
         if let ([n_di, n_dj, n_c0, n_c1], [n_b, n_i, n_j, n_c0_]) = (kernel.shape(), image.shape())
         {
             assert_eq!(
-                n_c0, n_c0_,
+                n_c0_, n_c0,
                 "number of channels in image do not match kernel's"
             );
 
@@ -121,16 +121,21 @@ impl Operation for Conv {
 }
 
 #[cfg(test)]
-mod forward {
-
-    use super::*;
+mod tests {
+    use conv::{Conv, Padding};
     use graph::Graph;
+    #[macro_use(s)]
+    use ndarray::{Array4, ArrayD, Array};
     use node::Node;
     use std::f32;
+    use rand::thread_rng;
+    use rand::distributions::{Distribution, Uniform};
+    use itertools::repeat_call;
 
     // TODO more tests for
-    // grad_param
-    // grad_input
+    // panic if image channels do not match kernel
+    // gradient kernel
+    // gradient image
     // Padding::No (all 3 functions)
 
     fn stripes(horizontal: bool) -> Node {
@@ -219,5 +224,64 @@ mod forward {
             "{:?}",
             g.nodes[conv].value
         )
+    }
+
+    #[test]
+    fn identity_kernel() {
+        let mut g = Graph::default();
+
+        let identity_kernel = Array::from_shape_fn([3, 3, 1, 1],
+            |(di, dj, c0, c1)| if di == 1 && dj == 1 && c0 == c1 { 1.0 } else { 0.0 }
+        ).into_dyn();
+
+        let identity_kernel = g.new_initialized_param(identity_kernel);
+        let img = g.register(stripes(true));
+        let conv = g.register(Node::Operation{
+            inputs: vec![identity_kernel, img],
+            operation: Box::new(Conv::new(Padding::Same)),
+        });
+        g.forward();
+        let conv = g.nodes[conv].value.slice(s!(0,..,..,0));
+        let orig = g.nodes[img].value.slice(s!(0,..,..,0));
+
+        assert_eq!(orig, conv, "Identity Kernel failed\n")
+
+    }
+
+    // #[test]
+    fn minimize_from_positive_image() {
+
+        let gen = repeat_call(move || {
+            Array::from_shape_fn([4, 5, 5, 1], |_|{
+                let mut rng = thread_rng();
+                let unif = Uniform::new(1.0, 2.0);
+                unif.sample(&mut rng)
+            }).into_dyn()
+        });
+        let mut g = Graph::default();
+        let input = g.register(Node::Input {
+            dataset: Box::new(gen),
+        });
+        let kernel = g.new_param(&[3, 3, 1, 1]);
+        let original_kernel = g.nodes[kernel].value.to_owned();
+        let conv = g.register(Node::Operation {
+            inputs: vec![kernel, input],
+            operation: Box::new(Conv::new(Padding::Same)),
+        });
+        for _ in 0..1 {
+            g.forward();
+            assert!(g.nodes[input].value.iter().all(|x| *x > 0.0), "Image should be positive");
+            g.nodes[conv].loss = -0.1 * g.nodes[conv].value.to_owned();
+            g.backward();
+        }
+
+        println!("Final Kernel\n{:?}\n", g.nodes[kernel].value);
+        println!("Final Image\n{:?}\n", g.nodes[input].value);
+        println!("Final Conv\n{:?}\n", g.nodes[conv].value);
+
+        assert!(
+            g.nodes[kernel].value.iter().all(|x| *x < 0.0),
+            "Conv failed to be all negative")
+
     }
 }

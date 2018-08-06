@@ -12,10 +12,6 @@ pub trait Operation {
     fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
 }
 
-pub trait DataSet {
-    fn next(&mut self) -> ArrayD<f32>;
-}
-
 pub trait Optimizer {
     fn from_shape(&self, shape: &[usize]) -> Box<Optimizer>;
     fn apply_gradient(&mut self, loss: ArrayViewD<f32>, param: ArrayViewMutD<f32>);

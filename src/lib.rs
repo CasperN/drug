@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate ndarray;
 extern crate rand;
 #[macro_use]
@@ -22,13 +23,10 @@ pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use graph::Graph;
-    use optimizers::SGD;
-
     #[test]
     fn test_param_initialize() {
-        let mut g = Graph::new(Box::new(xavier_initialize), Box::new(SGD()));
+        let mut g = Graph::default();
         assert_eq!(0, g.new_param(&[3, 3, 1, 8]));
         assert_eq!(g.nodes[0].value.shape(), [3, 3, 1, 8]);
     }
