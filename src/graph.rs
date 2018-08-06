@@ -3,16 +3,17 @@ use std::mem;
 
 use ndarray::{Array, ArrayD, ArrayViewD};
 
-use node::Node;
+use node::{Node, Optimizer};
+
 use optimizers::SGD;
+use xavier_initialize;
 
 pub type Idx = usize;
 
 pub struct Graph {
     pub nodes: Vec<RuntimeNode>,
-    // TODO
-    // initializer: Fn(&[usize]) -> ArrayD<f32>,
-    // optimizer: Box<OptimizerBuilder>
+    initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>,
+    optimizer: Box<Optimizer>,
 }
 
 pub struct RuntimeNode {
@@ -24,7 +25,6 @@ impl RuntimeNode {
     fn new_tmp() -> Self {
         RuntimeNode {
             variant: Node::Parameter {
-                shape: Vec::new(),
                 optimizer: Box::new(SGD()),
             },
             value: Array::zeros([0; 4]).into_dyn(),
@@ -43,9 +43,44 @@ impl Into<RuntimeNode> for Node {
     }
 }
 
+impl Default for Graph {
+    fn default() -> Self {
+        Graph::new(Box::new(xavier_initialize), Box::new(SGD()))
+    }
+}
+
 impl Graph {
-    pub fn new() -> Self {
-        Graph { nodes: Vec::new() }
+    pub fn new(initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>, optimizer: Box<Optimizer>) -> Self {
+        Graph {
+            nodes: Vec::new(),
+            initializer,
+            optimizer,
+        }
+    }
+
+    pub fn new_initialized_param(&mut self, param: ArrayD<f32>) -> Idx {
+        let shape = param.shape().to_vec();
+        let rtn = RuntimeNode {
+            variant: Node::Parameter {
+                optimizer: self.optimizer.from_shape(&shape[..]),
+            },
+            value: param,
+            loss: Array::zeros(&shape[..]),
+        };
+        self.nodes.push(rtn);
+        self.nodes.len() - 1
+    }
+
+    pub fn new_param(&mut self, shape: &[usize]) -> Idx {
+        let rtn = RuntimeNode {
+            variant: Node::Parameter {
+                optimizer: self.optimizer.from_shape(shape),
+            },
+            value: (self.initializer)(shape),
+            loss: Array::zeros(shape),
+        };
+        self.nodes.push(rtn);
+        self.nodes.len() - 1
     }
 
     pub fn register<T: Into<RuntimeNode>>(&mut self, node: T) -> Idx {

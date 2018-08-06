@@ -17,7 +17,7 @@ pub trait DataSet {
 }
 
 pub trait Optimizer {
-    // TODO optimizer needs to know shape to initialize value
+    fn from_shape(&self, shape: &[usize]) -> Box<Optimizer>;
     fn apply_gradient(&mut self, loss: ArrayViewD<f32>, param: ArrayViewMutD<f32>);
 }
 
@@ -31,7 +31,6 @@ pub enum Node {
 
     // Value is initialized at the start of the graph, loss is applied to value through optimizer
     Parameter {
-        shape: Vec<usize>,
         optimizer: Box<Optimizer>,
     },
 

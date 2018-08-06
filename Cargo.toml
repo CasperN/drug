@@ -5,3 +5,5 @@ authors = ["Casper Neo <casperneo@uchicago.edu>"]
 
 [dependencies]
 ndarray = "0.11.2"
+rand = "0.5.4"
+itertools = "0.7.8"
