@@ -5,7 +5,6 @@ extern crate ndarray;
 extern crate rand;
 extern crate test;
 
-
 #[macro_use(iproduct)]
 extern crate itertools;
 
@@ -14,6 +13,8 @@ use ndarray::ArrayD;
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 
+#[allow(dead_code, unused_variables)]
+mod activation;
 mod conv;
 pub mod graph;
 pub mod node;

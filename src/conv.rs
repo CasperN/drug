@@ -138,11 +138,11 @@ impl Operation for Conv {
 
 #[cfg(test)]
 mod tests {
-    use test::Bencher;
     use super::*;
     use rand::distributions::{Distribution, Uniform};
     use rand::thread_rng;
     use std::f32;
+    use test::Bencher;
     use xavier_initialize;
 
     #[test]
@@ -297,7 +297,7 @@ mod tests {
         }
     }
     #[bench]
-    fn eval_3x3_kernel_64x64x3_img(b: &mut Bencher) {
+    fn eval_3x3x8_kernel_64x64x3_img(b: &mut Bencher) {
         let kernel = xavier_initialize(&[3, 3, 3, 8]);
         let conv = Conv::new(Padding::Same);
         let img = xavier_initialize(&[1, 64, 64, 3]);
@@ -305,7 +305,7 @@ mod tests {
         b.iter(|| conv.eval(vec![kernel.view(), img.view()]));
     }
     #[bench]
-    fn grad_3x3_kernel_64x64x3_img(b: &mut Bencher) {
+    fn grad_3x3x8_kernel_64x64x3_img(b: &mut Bencher) {
         let kernel = xavier_initialize(&[3, 3, 3, 8]);
         let conv = Conv::new(Padding::Same);
         let img = xavier_initialize(&[1, 64, 64, 3]);
