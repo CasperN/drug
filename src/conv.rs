@@ -1,7 +1,6 @@
 use ndarray::{Array4, ArrayD, ArrayViewD, Ix4};
 use node::Operation;
 use std::cell::Cell;
-
 pub struct Conv {
     _dialation: usize,
     _stride: usize,
@@ -139,19 +138,12 @@ impl Operation for Conv {
 
 #[cfg(test)]
 mod tests {
-    use conv::{Conv, Padding};
-    use ndarray::{Array, Array4, ArrayD};
-    use node::Operation;
+    use test::Bencher;
+    use super::*;
     use rand::distributions::{Distribution, Uniform};
     use rand::thread_rng;
     use std::f32;
     use xavier_initialize;
-
-    // TODO more tests for
-    // panic if image channels do not match kernel
-    // gradient kernel
-    // gradient image
-    // Padding::No (all 3 functions)
 
     #[test]
     fn conv_point_same_padding() {
@@ -246,7 +238,7 @@ mod tests {
 
     #[test]
     fn identity_kernel_eval() {
-        let identity_kernel = Array::from_shape_fn([3, 3, 1, 1], |(di, dj, c0, c1)| {
+        let identity_kernel = Array4::from_shape_fn([3, 3, 1, 1], |(di, dj, c0, c1)| {
             if di == 1 && dj == 1 && c0 == c1 {
                 1.0
             } else {
@@ -265,7 +257,7 @@ mod tests {
 
     #[test]
     fn identity_kernel_grad() {
-        let identity_kernel = Array::from_shape_fn([3, 3, 1, 1], |(di, dj, c0, c1)| {
+        let identity_kernel = Array4::from_shape_fn([3, 3, 1, 1], |(di, dj, c0, c1)| {
             if di == 1 && dj == 1 && c0 == c1 {
                 1.0
             } else {
@@ -279,8 +271,6 @@ mod tests {
         let grad = conv.grad(vec![identity_kernel.view(), orig.view()], eval.view());
         assert_eq!(grad.len(), 2);
         let g_img = grad[1].view();
-        let g_ker = grad[0].view();
-
         assert_eq!(g_img, orig.view(), "backwards identity");
     }
 
@@ -293,7 +283,7 @@ mod tests {
 
         for _ in 0..5 {
             for _ in 0..3 {
-                let img = Array::from_shape_fn([4, 5, 5, 2], |_| unif.sample(&mut rng)).into_dyn();
+                let img = Array4::from_shape_fn([4, 5, 5, 2], |_| unif.sample(&mut rng)).into_dyn();
                 conv.eval(vec![kernel.view(), img.view()]);
                 let grad = conv.grad(vec![kernel.view(), img.view()], img.view());
                 let g_ker = grad[0].view();
@@ -305,5 +295,22 @@ mod tests {
                 kernel.view()
             )
         }
+    }
+    #[bench]
+    fn eval_3x3_kernel_64x64x3_img(b: &mut Bencher) {
+        let kernel = xavier_initialize(&[3, 3, 3, 8]);
+        let conv = Conv::new(Padding::Same);
+        let img = xavier_initialize(&[1, 64, 64, 3]);
+
+        b.iter(|| conv.eval(vec![kernel.view(), img.view()]));
+    }
+    #[bench]
+    fn grad_3x3_kernel_64x64x3_img(b: &mut Bencher) {
+        let kernel = xavier_initialize(&[3, 3, 3, 8]);
+        let conv = Conv::new(Padding::Same);
+        let img = xavier_initialize(&[1, 64, 64, 3]);
+        let out = conv.eval(vec![kernel.view(), img.view()]);
+
+        b.iter(|| conv.grad(vec![kernel.view(), img.view()], out.view()));
     }
 }

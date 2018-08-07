@@ -1,7 +1,10 @@
+#![feature(test)]
 #[allow(unused_imports)]
 #[macro_use(s)] // s! is used in tests
 extern crate ndarray;
 extern crate rand;
+extern crate test;
+
 
 #[macro_use(iproduct)]
 extern crate itertools;
