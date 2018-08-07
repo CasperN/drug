@@ -104,7 +104,7 @@ impl Operation for Conv {
 
             for [b, i, j, di, dj, c0, c1] in self.iter_idxs() {
                 if let Some((ci, cj)) = self.conv_point(i, j, di, dj) {
-                    println!("conv point{:?}", (i, j, di, dj, ci, cj));
+                    // println!("conv point{:?}", (i, j, di, dj, ci, cj));
                     output[(b, i, j, c1)] += kernel[(di, dj, c0, c1)] * image[(b, ci, cj, c0)];
                 }
             }
@@ -140,13 +140,12 @@ impl Operation for Conv {
 #[cfg(test)]
 mod tests {
     use conv::{Conv, Padding};
-    use graph::Graph;
-    use itertools::repeat_call;
     use ndarray::{Array, Array4, ArrayD};
-    use node::{Node, Operation};
+    use node::Operation;
     use rand::distributions::{Distribution, Uniform};
     use rand::thread_rng;
     use std::f32;
+    use xavier_initialize;
 
     // TODO more tests for
     // panic if image channels do not match kernel
@@ -246,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    fn identity_kernel() {
+    fn identity_kernel_eval() {
         let identity_kernel = Array::from_shape_fn([3, 3, 1, 1], |(di, dj, c0, c1)| {
             if di == 1 && dj == 1 && c0 == c1 {
                 1.0
@@ -264,46 +263,47 @@ mod tests {
         assert_eq!(orig, conv, "Identity Kernel failed\n");
     }
 
-    // #[test]
-    #[allow(dead_code, unused_variables)]
-    fn _minimize_from_positive_image() {
-        // Generate Arrays that sample unif[1, 2]
-        let gen = repeat_call(move || {
-            Array::from_shape_fn([4, 5, 5, 1], |_| {
-                let mut rng = thread_rng();
-                let unif = Uniform::new(1.0, 2.0);
-                unif.sample(&mut rng)
-            }).into_dyn()
-        });
-        // Construct graph
-        let mut g = Graph::default();
-        let input = g.register(Node::Input {
-            dataset: Box::new(gen),
-        });
-        let kernel = g.new_param(&[3, 3, 1, 1]);
-        let original_kernel = g.nodes[kernel].value.to_owned();
-        let conv = g.register(Node::Operation {
-            inputs: vec![kernel, input],
-            operation: Box::new(Conv::new(Padding::Same)),
-        });
-        // Run graph
+    #[test]
+    fn identity_kernel_grad() {
+        let identity_kernel = Array::from_shape_fn([3, 3, 1, 1], |(di, dj, c0, c1)| {
+            if di == 1 && dj == 1 && c0 == c1 {
+                1.0
+            } else {
+                0.0
+            }
+        }).into_dyn();
+
+        let orig = stripes(true);
+        let conv = Conv::new(Padding::Same);
+        let eval = conv.eval(vec![identity_kernel.view(), orig.view()]);
+        let grad = conv.grad(vec![identity_kernel.view(), orig.view()], eval.view());
+        assert_eq!(grad.len(), 2);
+        let g_img = grad[1].view();
+        let g_ker = grad[0].view();
+
+        assert_eq!(g_img, orig.view(), "backwards identity");
+    }
+
+    #[test]
+    fn minimize_from_positive_image() {
+        let mut rng = thread_rng();
+        let unif = Uniform::new(1.0, 2.0);
+        let conv = Conv::new(Padding::Same);
+        let mut kernel = xavier_initialize(&[3, 3, 2, 2]);
+
         for _ in 0..5 {
-            g.forward();
+            for _ in 0..3 {
+                let img = Array::from_shape_fn([4, 5, 5, 2], |_| unif.sample(&mut rng)).into_dyn();
+                conv.eval(vec![kernel.view(), img.view()]);
+                let grad = conv.grad(vec![kernel.view(), img.view()], img.view());
+                let g_ker = grad[0].view();
+                kernel = kernel - g_ker
+            }
             assert!(
-                g.nodes[input].value.iter().all(|x| *x > 0.0),
-                "Image should be positive"
-            );
-            g.nodes[conv].loss = 0.1 * g.nodes[conv].value.to_owned();
-            g.backward();
+                kernel.iter().all(|x| *x < 0.0),
+                "Kernel failed to learn to be all negative\n{:?}",
+                kernel.view()
+            )
         }
-
-        println!("Final Kernel\n{:?}\n", g.nodes[kernel].value);
-        // println!("Final Image\n{:?}\n", g.nodes[input].value);
-        // println!("Final Conv\n{:?}\n", g.nodes[conv].value);
-
-        assert!(
-            g.nodes[kernel].value.iter().all(|x| *x < 0.0) & false,
-            "Conv failed to be all negative"
-        )
     }
 }
