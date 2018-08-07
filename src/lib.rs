@@ -1,7 +1,9 @@
-#[macro_use]
+#[allow(unused_imports)]
+#[macro_use(s)] // s! is used in tests
 extern crate ndarray;
 extern crate rand;
-#[macro_use]
+
+#[macro_use(iproduct)]
 extern crate itertools;
 
 use ndarray::ArrayD;
