@@ -1,6 +1,8 @@
 use ndarray::{Array4, ArrayD, ArrayViewD, Ix4};
 use node::Operation;
 use std::cell::Cell;
+
+#[derive(Debug)]
 pub struct Conv {
     _dialation: usize,
     _stride: usize,
@@ -47,14 +49,8 @@ impl Conv {
         match self.padding {
             Padding::Same => {
                 // subtract kernel size / 2 to center kernel
-                let ci = (i + di)
-                    .checked_sub(kernel_offset_i)
-                    .unwrap_or(0)
-                    .min(n_i - 1);
-                let cj = (j + dj)
-                    .checked_sub(kernel_offset_j)
-                    .unwrap_or(0)
-                    .min(n_j - 1);
+                let ci = (i + di).saturating_sub(kernel_offset_i).min(n_i - 1);
+                let cj = (j + dj).saturating_sub(kernel_offset_j).min(n_j - 1);
                 Some((ci, cj))
             }
             Padding::No => {

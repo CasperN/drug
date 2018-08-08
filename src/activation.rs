@@ -1,27 +1,28 @@
 use ndarray::{ArrayD, ArrayViewD};
 use node::Operation;
 
-pub struct Relu {
-    leak: f32,
-}
+// LeakyRelu
+#[derive(Debug)]
+pub struct Relu(pub f32);
 
 impl Operation for Relu {
     fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32> {
         assert_eq!(inputs.len(), 1, "Relu accepts one input");
-        inputs[0].mapv(|x| if x > 0.0 { x } else { x * self.leak })
+        inputs[0].mapv(|x| if x > 0.0 { x } else { x * self.0 })
     }
     fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         assert_eq!(inputs.len(), 1, "Relu accepts one input");
         let mut res = loss.to_owned();
         res.zip_mut_with(&inputs[0], |l, i| {
             if *i < 0.0 {
-                *l *= self.leak
+                *l *= self.0
             }
         });
         vec![res]
     }
 }
 
+#[derive(Debug)]
 pub struct Sigmoid();
 
 fn sig(x: f32) -> f32 {

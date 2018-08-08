@@ -1,6 +1,7 @@
 use ndarray::{ArrayViewD, ArrayViewMutD, Zip};
 use node::Optimizer;
 
+#[derive(Debug)]
 pub struct SGD();
 
 impl Optimizer for SGD {

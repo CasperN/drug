@@ -86,6 +86,7 @@ impl Graph {
     }
 
     pub fn register<T: Into<RuntimeNode>>(&mut self, node: T) -> Idx {
+        // TODO Check Idx makes sense for Operation inputs
         self.nodes.push(node.into());
         self.nodes.len() - 1
     }

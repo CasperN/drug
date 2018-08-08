@@ -1,25 +1,29 @@
 #![feature(test)]
 #[allow(unused_imports)]
 #[macro_use(s)] // s! is used in tests
-extern crate ndarray;
+pub extern crate ndarray;
 extern crate rand;
 extern crate test;
 
 #[macro_use(iproduct)]
 extern crate itertools;
 
+// pub use ndarray;
 use ndarray::ArrayD;
-
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 
-#[allow(dead_code, unused_variables)]
-mod activation;
+pub mod activation;
 mod conv;
-pub mod graph;
-pub mod node;
+mod graph;
+mod node;
 mod optimizers;
 
+pub use conv::{Conv, Padding};
+pub use graph::{Graph, RuntimeNode};
+pub use node::{Node, Operation, Optimizer};
+
+// TODO initializers file
 pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
     let len: usize = shape.iter().product();
     let normal = Normal::new(0.0, 1.0 / len as f64);

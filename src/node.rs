@@ -1,7 +1,10 @@
+use activation;
+use conv::{Conv, Padding};
 use graph::Idx;
 use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
+use std::fmt::Debug;
 
-pub trait Operation {
+pub trait Operation: Debug {
     // Represents a differentiable function
 
     // Mutates Outputs in place based on Inputs
@@ -12,7 +15,7 @@ pub trait Operation {
     fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
 }
 
-pub trait Optimizer {
+pub trait Optimizer: Debug {
     fn from_shape(&self, shape: &[usize]) -> Box<Optimizer>;
     fn apply_gradient(&mut self, loss: ArrayViewD<f32>, param: ArrayViewMutD<f32>);
 }
@@ -36,4 +39,22 @@ pub enum Node {
         inputs: Vec<Idx>,
         operation: Box<Operation>,
     },
+}
+impl Node {
+    // Maybe just have only one field and call directly?
+    pub fn input(dataset: Box<Iterator<Item = ArrayD<f32>>>) -> Self {
+        Node::Input { dataset }
+    }
+    pub fn relu(x: Idx) -> Self {
+        Node::Operation {
+            inputs: vec![x],
+            operation: Box::new(activation::Relu(0.0)),
+        }
+    }
+    pub fn conv(kernel: Idx, img: Idx, padding: Padding) -> Self {
+        Node::Operation {
+            inputs: vec![kernel, img],
+            operation: Box::new(Conv::new(padding)),
+        }
+    }
 }
