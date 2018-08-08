@@ -33,6 +33,11 @@ impl RuntimeNode {
             loss: Array::zeros([0; 4]).into_dyn(),
         }
     }
+    pub fn minimize(&mut self, learning_rate: f32) {
+        // Adds value * learning_rate to loss, will be backpropagated upon graph backward pass
+        self.loss
+            .zip_mut_with(&self.value, |l, v| *l = *v * learning_rate);
+    }
 }
 
 impl Into<RuntimeNode> for Node {
@@ -96,37 +101,32 @@ impl Graph {
             // Need to borrow self.nodes to get inputs, this is fine as no node has itself as input
             let mut current_node = RuntimeNode::new_tmp();
             mem::swap(&mut current_node, &mut self.nodes[i]);
-            // Update Values
-            match current_node {
-                RuntimeNode {
-                    variant: Node::Input { ref mut dataset },
+            {
+                let RuntimeNode {
+                    ref mut variant,
                     ref mut value,
                     ..
-                } => {
-                    if let Some(v) = dataset.next() {
-                        *value = v;
-                    } else {
-                        unimplemented!("TODO handle input exhaustion gracefully")
+                } = current_node;
+
+                match variant {
+                    Node::Input { ref mut dataset } => {
+                        if let Some(v) = dataset.next() {
+                            *value = v;
+                        } else {
+                            unimplemented!("TODO handle input exhaustion gracefully")
+                        }
                     }
-                }
 
-                RuntimeNode {
-                    variant:
-                        Node::Operation {
-                            ref mut inputs,
-                            ref mut operation,
-                        },
-                    ref mut value,
-                    ..
-                } => {
-                    let inputs = get_input_values(&inputs, &self.nodes);
-                    *value = operation.eval(inputs);
-                }
+                    Node::Operation {
+                        ref mut inputs,
+                        ref mut operation,
+                    } => {
+                        let inputs = get_input_values(&inputs, &self.nodes);
+                        *value = operation.eval(inputs);
+                    }
 
-                RuntimeNode {
-                    variant: Node::Parameter { .. },
-                    ..
-                } => {}
+                    Node::Parameter { .. } => {}
+                }
             }
             // reset losses
             current_node.loss = Array::zeros(current_node.value.shape());
@@ -138,43 +138,36 @@ impl Graph {
             // Need to borrow self.nodes to get inputs, this is fine as no node has itself as input
             let mut current_node = RuntimeNode::new_tmp();
             mem::swap(&mut current_node, &mut self.nodes[i]);
+            {
+                let RuntimeNode {
+                    ref mut variant,
+                    ref mut value,
+                    ref mut loss,
+                } = current_node;
 
-            match current_node {
-                RuntimeNode {
-                    variant: Node::Input { .. },
-                    ..
-                } => {}
+                match variant {
+                    Node::Input { .. } => {}
+                    
+                    Node::Operation {
+                        ref inputs,
+                        ref mut operation,
+                    } => {
+                        let gradients =
+                            operation.grad(get_input_values(&inputs, &self.nodes), loss.view());
 
-                RuntimeNode {
-                    variant:
-                        Node::Operation {
-                            ref inputs,
-                            ref mut operation,
-                        },
-                    ref loss,
-                    ..
-                } => {
-                    let gradients =
-                        operation.grad(get_input_values(&inputs, &self.nodes), loss.view());
+                        for (grad, j) in gradients.iter().zip(inputs.iter()) {
+                            // TODO make this support broadcasting
+                            self.nodes[*j].loss += grad;
+                        }
+                    }
 
-                    for (grad, j) in gradients.iter().zip(inputs.iter()) {
-                        // TODO make this support broadcasting
-                        self.nodes[*j].loss += grad;
+                    Node::Parameter {
+                        ref mut optimizer, ..
+                    } => {
+                        optimizer.apply_gradient(loss.view(), value.view_mut());
                     }
                 }
-
-                RuntimeNode {
-                    variant:
-                        Node::Parameter {
-                            ref mut optimizer, ..
-                        },
-                    ref loss,
-                    ref mut value,
-                } => {
-                    optimizer.apply_gradient(loss.view(), value.view_mut());
-                }
             }
-
             mem::swap(&mut current_node, &mut self.nodes[i]);
         }
     }

@@ -45,4 +45,8 @@ fn main() {
     let relu1 = g.register(Node::relu(conv1));
     let conv2 = g.register(Node::conv(k2, relu1, Padding::Same));
     let _relu2 = g.register(Node::relu(conv2));
+    // let avgp = g.register(Node::global_average_pool(relu2))
+    // let smax = g.register(Node::softmax(avgp))
+    // let tst_data = g.register(Node::input(Box::new(tst_lbl.into_iter())))
+    // let loss = g.register(Node::cross_entropy_loss(avgp, tst_data))
 }
