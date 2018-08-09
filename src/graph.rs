@@ -1,8 +1,7 @@
 use std::convert::Into;
-use std::mem;
+use std::{fmt, mem};
 
 use ndarray::{Array, ArrayD, ArrayViewD};
-
 use node::{Node, Optimizer};
 
 use optimizers::SGD;
@@ -10,19 +9,25 @@ use xavier_initialize;
 
 pub type Idx = usize;
 
-pub struct Graph {
-    pub nodes: Vec<RuntimeNode>,
-    initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>,
-    optimizer: Box<Optimizer>,
-}
-
+#[derive(Debug)]
 pub struct RuntimeNode {
     pub variant: Node,
     pub value: ArrayD<f32>,
     pub loss: ArrayD<f32>, // should be same shape as value, probably ignored by Inputs
 }
-// Shape information?
 
+impl fmt::Display for RuntimeNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Customize so only `x` and `y` are denoted.
+        write!(
+            f,
+            "Node{{\n{:?} value shape: {:?}, loss shape: {:?}}}",
+            self.variant,
+            self.value.shape(),
+            self.loss.shape()
+        )
+    }
+}
 impl RuntimeNode {
     fn new_tmp() -> Self {
         RuntimeNode {
@@ -39,6 +44,33 @@ impl RuntimeNode {
             .zip_mut_with(&self.value, |l, v| *l = *v * learning_rate);
     }
 }
+
+#[derive(DebugStub)]
+pub struct Graph {
+    pub nodes: Vec<RuntimeNode>,
+    #[debug_stub = "Initializer function"]
+    initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>,
+    optimizer: Box<Optimizer>,
+}
+impl fmt::Display for Graph {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Customize so only `x` and `y` are denoted.
+        writeln!(f, "Computation Graph with Optimizer: {:?}", self.optimizer)?;
+        for (i, rtn) in self.nodes.iter().enumerate() {
+            writeln!(
+                f,
+                "\n{}\t{:?}\n\tvalue shape: {:?}\n\tloss shape:  {:?}",
+                i,
+                rtn.variant,
+                rtn.value.shape(),
+                rtn.loss.shape()
+            )?
+        }
+        Ok(())
+    }
+}
+
+// Shape information?
 
 impl Into<RuntimeNode> for Node {
     fn into(self: Node) -> RuntimeNode {
@@ -147,7 +179,7 @@ impl Graph {
 
                 match variant {
                     Node::Input { .. } => {}
-                    
+
                     Node::Operation {
                         ref inputs,
                         ref mut operation,

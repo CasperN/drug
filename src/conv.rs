@@ -5,7 +5,7 @@ use std::cell::Cell;
 #[derive(Debug)]
 pub struct Conv {
     _dialation: usize,
-    _stride: usize,
+    stride: (usize, usize),
     padding: Padding,
     idx_ranges: Cell<[usize; 7]>,
 }
@@ -17,26 +17,26 @@ pub enum Padding {
     No,
 }
 
+impl Default for Conv {
+    fn default() -> Self {
+        Conv {
+            _dialation: 1,
+            stride: (1, 1),
+            padding: Padding::Same,
+            idx_ranges: Cell::new([0; 7]),
+        }
+    }
+}
+
 impl Conv {
     #[allow(dead_code)]
     pub fn new(padding: Padding) -> Self {
         Conv {
             _dialation: 1,
-            _stride: 1,
+            stride: (1, 1),
             padding,
             idx_ranges: Cell::new([0; 7]),
         }
-    }
-
-    fn iter_idxs(&self) -> impl Iterator<Item = [usize; 7]> {
-        // Returns a boxed iterator to iterate over the indices b/c impl Iter is not good enough
-        // makes for nicer code but consider profiling -- may need to OPTIMIZE
-        // TODO refactor this into the others
-
-        let [n_b, n_i, n_j, n_di, n_dj, n_c0, n_c1] = self.idx_ranges.get();
-
-        iproduct!(0..n_b, 0..n_i, 0..n_j, 0..n_di, 0..n_dj, 0..n_c0, 0..n_c1)
-            .map(|(b, i, j, di, dj, c0, c1)| [b, i, j, di, dj, c0, c1])
     }
 
     fn conv_point(&self, i: usize, j: usize, di: usize, dj: usize) -> Option<(usize, usize)> {
@@ -49,16 +49,20 @@ impl Conv {
         match self.padding {
             Padding::Same => {
                 // subtract kernel size / 2 to center kernel
-                let ci = (i + di).saturating_sub(kernel_offset_i).min(n_i - 1);
-                let cj = (j + dj).saturating_sub(kernel_offset_j).min(n_j - 1);
+                let ci = (i * self.stride.0 + di)
+                    .saturating_sub(kernel_offset_i)
+                    .min(n_i - 1);
+                let cj = (j * self.stride.1 + dj)
+                    .saturating_sub(kernel_offset_j)
+                    .min(n_j - 1);
                 Some((ci, cj))
             }
             Padding::No => {
                 // No padding so next image is di (dj) rows (cols) smaller
                 if kernel_offset_i <= i && i + n_di < n_i {
-                    let ci = i + di - kernel_offset_i;
+                    let ci = i * self.stride.0 + di - kernel_offset_i;
                     if kernel_offset_j <= j && j + n_dj < n_j {
-                        let cj = j + dj - kernel_offset_j;
+                        let cj = j * self.stride.1 + dj - kernel_offset_j;
                         return Some((ci, cj));
                     }
                 }
@@ -97,10 +101,11 @@ impl Operation for Conv {
 
             let mut output = self.zeroed_output();
 
-            for [b, i, j, di, dj, c0, c1] in self.iter_idxs() {
-                if let Some((ci, cj)) = self.conv_point(i, j, di, dj) {
-                    // println!("conv point{:?}", (i, j, di, dj, ci, cj));
-                    output[(b, i, j, c1)] += kernel[(di, dj, c0, c1)] * image[(b, ci, cj, c0)];
+            for (b, i, j, di, dj) in iproduct!(0..*n_b, 0..*n_i, 0..*n_j, 0..*n_di, 0..*n_dj) {
+                if let Some((ci, cj)) = self.conv_point(i, j, di, dj){
+                    for (c0, c1) in iproduct!(0..*n_c0, 0..*n_c1) {
+                        output[(b, i, j, c1)] += kernel[(di, dj, c0, c1)] * image[(b, ci, cj, c0)];
+                    }
                 }
             }
             output.into_dyn()
@@ -122,12 +127,15 @@ impl Operation for Conv {
         let mut grad_kernel = Array4::zeros([n_di, n_dj, n_c0, n_c1]);
         let mut grad_image = Array4::zeros([n_b, n_i, n_j, n_c0]);
 
-        for [b, i, j, di, dj, c0, c1] in self.iter_idxs() {
-            if let Some((ci, cj)) = self.conv_point(i, j, di, dj) {
-                grad_kernel[(di, dj, c0, c1)] += loss[(b, i, j, c1)] * image[(b, ci, cj, c0)];
-                grad_image[(b, ci, cj, c0)] += loss[(b, i, j, c1)] * kernel[(di, dj, c0, c1)];
+        for (b, i, j, di, dj) in iproduct!(0..n_b, 0..n_i, 0..n_j, 0..n_di, 0..n_dj) {
+            if let Some((ci, cj)) = self.conv_point(i, j, di, dj){
+                for (c0, c1) in iproduct!(0..n_c0, 0..n_c1) {
+                    grad_kernel[(di, dj, c0, c1)] += loss[(b, i, j, c1)] * image[(b, ci, cj, c0)];
+                    grad_image[(b, ci, cj, c0)] += loss[(b, i, j, c1)] * kernel[(di, dj, c0, c1)];
+                }
             }
         }
+
         vec![grad_kernel.into_dyn(), grad_image.into_dyn()]
     }
 }

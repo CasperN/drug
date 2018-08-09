@@ -7,6 +7,7 @@ authors = ["Casper Neo <casperneo@uchicago.edu>"]
 ndarray = "0.11.2"
 rand = "0.5.4"
 itertools = "0.7.8"
+debug_stub_derive = "0.3.0"
 
 [dev-dependencies]
 byteorder = "1.2.4"

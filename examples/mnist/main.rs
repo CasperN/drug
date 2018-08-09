@@ -7,7 +7,8 @@ use diff::*;
 use ndarray::Array;
 use std::path::Path;
 #[allow(dead_code)]
-mod mnist_input;
+mod input;
+use input::images;
 
 static DATA: &'static str = "examples/data/";
 static TR_IMG: &'static str = "train-images-idx3-ubyte";
@@ -20,11 +21,12 @@ static TR_LEN: u32 = 60_000;
 // static COLS: usize = 28;
 
 fn main() {
-    let tr_img = mnist_input::images(&Path::new(DATA).join(TR_IMG), TR_LEN);
+    println!("Reading data...",);
+    let tr_img = images(&Path::new(DATA).join(TR_IMG), TR_LEN);
     // let tr_lbl = labels(&Path::new(DATA).join(TR_LBL), TR_LEN);
     // let ts_img = images(&Path::new(DATA).join(TS_IMG), TS_LEN);
     // let _ts_lbl = labels(&Path::new(DATA).join(TS_LBL), TS_LEN);
-    println!("Data read");
+    println!("Data read...");
 
     let batch_size = 4;
 
@@ -36,15 +38,19 @@ fn main() {
     });
 
     // Build graph
+    println!("Building graph...");
     let mut g = Graph::default();
-    let k1 = g.new_param(&[3, 3, 1, 8]);
-    let k2 = g.new_param(&[3, 3, 1, 16]);
-
     let data = g.register(Node::input(Box::new(data.into_iter())));
+    let k1 = g.new_param(&[3, 3, 1, 8]);
     let conv1 = g.register(Node::conv(k1, data, Padding::Same));
+    let k2 = g.new_param(&[3, 3, 8, 16]);
     let relu1 = g.register(Node::relu(conv1));
     let conv2 = g.register(Node::conv(k2, relu1, Padding::Same));
     let _relu2 = g.register(Node::relu(conv2));
+
+    println!("Forward pass...");
+    g.forward();
+    println!("{}", g);
     // let avgp = g.register(Node::global_average_pool(relu2))
     // let smax = g.register(Node::softmax(avgp))
     // let tst_data = g.register(Node::input(Box::new(tst_lbl.into_iter())))

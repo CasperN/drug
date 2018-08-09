@@ -12,7 +12,9 @@ rust.
 # TODO Now
 * Working Mnist example
     * GlobalAveragePool
-    * Softmax-X-Entropy Loss
+    * Softmax
+    * X-Entropy Loss
+    * Training loop
 * Bias add
 * Matrix multiply
 

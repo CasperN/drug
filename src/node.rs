@@ -1,5 +1,6 @@
 use activation;
 use conv::{Conv, Padding};
+use global_average_pool::GlobalPool;
 use graph::Idx;
 use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
 use std::fmt::Debug;
@@ -20,11 +21,13 @@ pub trait Optimizer: Debug {
     fn apply_gradient(&mut self, loss: ArrayViewD<f32>, param: ArrayViewMutD<f32>);
 }
 
+#[derive(DebugStub)]
 pub enum Node {
     // These versions of node differ in how the value is produced and how loss is propagated back
 
     // Produce Value from beyond the graph, ignore loss
     Input {
+        #[debug_stub = "Box<dyn Iterator<Item = ArrayD<f32>>>"]
         dataset: Box<Iterator<Item = ArrayD<f32>>>,
     },
 
@@ -55,6 +58,12 @@ impl Node {
         Node::Operation {
             inputs: vec![kernel, img],
             operation: Box::new(Conv::new(padding)),
+        }
+    }
+    pub fn global_average_pool(input: Idx) -> Self {
+        Node::Operation {
+            inputs: vec![input],
+            operation: Box::new(GlobalPool::Average),
         }
     }
 }

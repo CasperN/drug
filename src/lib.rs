@@ -4,6 +4,8 @@
 pub extern crate ndarray;
 extern crate rand;
 extern crate test;
+#[macro_use]
+extern crate debug_stub_derive;
 
 #[macro_use(iproduct)]
 extern crate itertools;
@@ -15,6 +17,7 @@ use rand::thread_rng;
 
 pub mod activation;
 mod conv;
+mod global_average_pool;
 mod graph;
 mod node;
 mod optimizers;
