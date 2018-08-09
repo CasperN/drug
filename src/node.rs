@@ -1,6 +1,6 @@
 use activation;
 use conv::{Conv, Padding};
-use global_average_pool::GlobalPool;
+use global_pool::GlobalPool;
 use graph::Idx;
 use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
 use std::fmt::Debug;

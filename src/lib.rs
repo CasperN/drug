@@ -17,7 +17,7 @@ use rand::thread_rng;
 
 pub mod activation;
 mod conv;
-mod global_average_pool;
+mod global_pool;
 mod graph;
 mod node;
 mod optimizers;

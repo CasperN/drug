@@ -102,7 +102,7 @@ impl Operation for Conv {
             let mut output = self.zeroed_output();
 
             for (b, i, j, di, dj) in iproduct!(0..*n_b, 0..*n_i, 0..*n_j, 0..*n_di, 0..*n_dj) {
-                if let Some((ci, cj)) = self.conv_point(i, j, di, dj){
+                if let Some((ci, cj)) = self.conv_point(i, j, di, dj) {
                     for (c0, c1) in iproduct!(0..*n_c0, 0..*n_c1) {
                         output[(b, i, j, c1)] += kernel[(di, dj, c0, c1)] * image[(b, ci, cj, c0)];
                     }
@@ -128,7 +128,7 @@ impl Operation for Conv {
         let mut grad_image = Array4::zeros([n_b, n_i, n_j, n_c0]);
 
         for (b, i, j, di, dj) in iproduct!(0..n_b, 0..n_i, 0..n_j, 0..n_di, 0..n_dj) {
-            if let Some((ci, cj)) = self.conv_point(i, j, di, dj){
+            if let Some((ci, cj)) = self.conv_point(i, j, di, dj) {
                 for (c0, c1) in iproduct!(0..n_c0, 0..n_c1) {
                     grad_kernel[(di, dj, c0, c1)] += loss[(b, i, j, c1)] * image[(b, ci, cj, c0)];
                     grad_image[(b, ci, cj, c0)] += loss[(b, i, j, c1)] * kernel[(di, dj, c0, c1)];
@@ -300,6 +300,7 @@ mod tests {
             )
         }
     }
+
     #[bench]
     fn eval_3x3x8_kernel_64x64x3_img(b: &mut Bencher) {
         let kernel = xavier_initialize(&[3, 3, 3, 8]);
@@ -317,4 +318,5 @@ mod tests {
 
         b.iter(|| conv.grad(vec![kernel.view(), img.view()], out.view()));
     }
+
 }
