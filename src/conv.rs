@@ -30,10 +30,10 @@ impl Default for Conv {
 
 impl Conv {
     #[allow(dead_code)]
-    pub fn new(padding: Padding) -> Self {
+    pub fn new(padding: Padding, stride: usize) -> Self {
         Conv {
             _dialation: 1,
-            stride: (1, 1),
+            stride: (stride, stride),
             padding,
             idx_ranges: Cell::new([0; 7]),
         }
@@ -70,17 +70,10 @@ impl Conv {
             }
         }
     }
-
-    fn zeroed_output(&self) -> Array4<f32> {
-        let [n_b, n_i, n_j, n_di, n_dj, _, n_c1] = self.idx_ranges.get();
-        match self.padding {
-            Padding::Same => Array4::zeros([n_b, n_i, n_j, n_c1]),
-            Padding::No => Array4::zeros([n_b, n_i - n_di, n_j - n_dj, n_c1]),
-        }
-    }
 }
 
 impl Operation for Conv {
+    #[allow(unused_mut)]
     fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32> {
         assert!(
             inputs.len() == 2,
@@ -89,19 +82,26 @@ impl Operation for Conv {
         let kernel = inputs[0].view().into_dimensionality::<Ix4>().unwrap();
         let image = inputs[1].view().into_dimensionality::<Ix4>().unwrap();
 
+        // Attaching mut to n_i, n_j makes them variables that dont need to be mutable
+        // but without it, they are references ==><==
         if let ([n_di, n_dj, n_c0, n_c1], [n_b, n_i, n_j, n_c0_]) = (kernel.shape(), image.shape())
         {
             assert_eq!(
                 n_c0_, n_c0,
                 "number of channels in image do not match kernel's"
             );
+            // Striding shrinks image
+            let (out_i, out_j) = match self.padding {
+                Padding::Same => (n_i / self.stride.0, n_j / self.stride.1),
+                Padding::No => ((n_i - n_di) / self.stride.0, (n_j - n_dj) / self.stride.1),
+            };
 
             self.idx_ranges
                 .set([*n_b, *n_i, *n_j, *n_di, *n_dj, *n_c0, *n_c1]);
 
-            let mut output = self.zeroed_output();
+            let mut output = Array4::zeros([*n_b, out_i, out_j, *n_c1]);
 
-            for (b, i, j, di, dj) in iproduct!(0..*n_b, 0..*n_i, 0..*n_j, 0..*n_di, 0..*n_dj) {
+            for (b, i, j, di, dj) in iproduct!(0..*n_b, 0..out_i, 0..out_j, 0..*n_di, 0..*n_dj) {
                 if let Some((ci, cj)) = self.conv_point(i, j, di, dj) {
                     for (c0, c1) in iproduct!(0..*n_c0, 0..*n_c1) {
                         output[(b, i, j, c1)] += kernel[(di, dj, c0, c1)] * image[(b, ci, cj, c0)];
@@ -123,11 +123,13 @@ impl Operation for Conv {
         let loss = loss.into_dimensionality::<Ix4>().unwrap();
 
         let [n_b, n_i, n_j, n_di, n_dj, n_c0, n_c1] = self.idx_ranges.get();
+        let out_i = n_i / self.stride.0;
+        let out_j = n_j / self.stride.1;
 
         let mut grad_kernel = Array4::zeros([n_di, n_dj, n_c0, n_c1]);
         let mut grad_image = Array4::zeros([n_b, n_i, n_j, n_c0]);
 
-        for (b, i, j, di, dj) in iproduct!(0..n_b, 0..n_i, 0..n_j, 0..n_di, 0..n_dj) {
+        for (b, i, j, di, dj) in iproduct!(0..n_b, 0..out_i, 0..out_j, 0..n_di, 0..n_dj) {
             if let Some((ci, cj)) = self.conv_point(i, j, di, dj) {
                 for (c0, c1) in iproduct!(0..n_c0, 0..n_c1) {
                     grad_kernel[(di, dj, c0, c1)] += loss[(b, i, j, c1)] * image[(b, ci, cj, c0)];
@@ -153,7 +155,7 @@ mod tests {
     fn conv_point_same_padding() {
         let ker = Array4::zeros([3, 3, 1, 1]).into_dyn();
         let img = Array4::zeros([4, 4, 4, 1]).into_dyn();
-        let c = Conv::new(Padding::Same);
+        let c = Conv::new(Padding::Same, 1);
         c.eval(vec![ker.view(), img.view()]);
         assert_eq!(c.idx_ranges.get(), [4, 4, 4, 3, 3, 1, 1]);
         assert_eq!(
@@ -215,7 +217,7 @@ mod tests {
             println!("{:?}", (*padding, *det, *st));
             let kernel = stripe_detector_kernel(*det);
             let stripes = stripes(*st);
-            let conv = Conv::new(*padding);
+            let conv = Conv::new(*padding, 1);
             let detections = conv.eval(vec![kernel.view(), stripes.view()]);
             let detections = detections.slice(s!(0, .., .., 0));
             if *det != *st {
@@ -251,7 +253,7 @@ mod tests {
         }).into_dyn();
 
         let img = stripes(true);
-        let conv = Conv::new(Padding::Same);
+        let conv = Conv::new(Padding::Same, 1);
         let res = conv.eval(vec![identity_kernel.view(), img.view()]);
         let conv = res.slice(s!(0, .., .., 0));
         let orig = img.slice(s!(0, .., .., 0));
@@ -270,7 +272,7 @@ mod tests {
         }).into_dyn();
 
         let orig = stripes(true);
-        let conv = Conv::new(Padding::Same);
+        let conv = Conv::new(Padding::Same, 1);
         let eval = conv.eval(vec![identity_kernel.view(), orig.view()]);
         let grad = conv.grad(vec![identity_kernel.view(), orig.view()], eval.view());
         assert_eq!(grad.len(), 2);
@@ -282,7 +284,7 @@ mod tests {
     fn minimize_from_positive_image() {
         let mut rng = thread_rng();
         let unif = Uniform::new(1.0, 2.0);
-        let conv = Conv::new(Padding::Same);
+        let conv = Conv::new(Padding::Same, 1);
         let mut kernel = xavier_initialize(&[3, 3, 2, 2]);
 
         for _ in 0..5 {
@@ -304,7 +306,7 @@ mod tests {
     #[bench]
     fn eval_3x3x8_kernel_64x64x3_img(b: &mut Bencher) {
         let kernel = xavier_initialize(&[3, 3, 3, 8]);
-        let conv = Conv::new(Padding::Same);
+        let conv = Conv::new(Padding::Same, 1);
         let img = xavier_initialize(&[1, 64, 64, 3]);
 
         b.iter(|| conv.eval(vec![kernel.view(), img.view()]));
@@ -312,7 +314,7 @@ mod tests {
     #[bench]
     fn grad_3x3x8_kernel_64x64x3_img(b: &mut Bencher) {
         let kernel = xavier_initialize(&[3, 3, 3, 8]);
-        let conv = Conv::new(Padding::Same);
+        let conv = Conv::new(Padding::Same, 1);
         let img = xavier_initialize(&[1, 64, 64, 3]);
         let out = conv.eval(vec![kernel.view(), img.view()]);
 

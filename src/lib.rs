@@ -16,6 +16,7 @@ use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 
 pub mod activation;
+
 mod conv;
 mod global_pool;
 mod graph;
@@ -23,6 +24,7 @@ mod node;
 mod optimizers;
 
 pub use conv::{Conv, Padding};
+pub use global_pool::GlobalPool;
 pub use graph::{Graph, RuntimeNode};
 pub use node::{Node, Operation, Optimizer};
 
@@ -43,5 +45,4 @@ mod tests {
         assert_eq!(0, g.new_param(&[3, 3, 1, 8]));
         assert_eq!(g.nodes[0].value.shape(), [3, 3, 1, 8]);
     }
-
 }

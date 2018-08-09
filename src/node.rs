@@ -54,16 +54,16 @@ impl Node {
             operation: Box::new(activation::Relu(0.0)),
         }
     }
-    pub fn conv(kernel: Idx, img: Idx, padding: Padding) -> Self {
+    pub fn conv(kernel: Idx, img: Idx, padding: Padding, stride: usize) -> Self {
         Node::Operation {
             inputs: vec![kernel, img],
-            operation: Box::new(Conv::new(padding)),
+            operation: Box::new(Conv::new(padding, stride)),
         }
     }
-    pub fn global_average_pool(input: Idx) -> Self {
+    pub fn global_pool(input: Idx, pool: GlobalPool) -> Self {
         Node::Operation {
             inputs: vec![input],
-            operation: Box::new(GlobalPool::Average),
+            operation: Box::new(pool),
         }
     }
 }

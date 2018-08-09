@@ -40,18 +40,33 @@ fn main() {
     // Build graph
     println!("Building graph...");
     let mut g = Graph::default();
-    let data = g.register(Node::input(Box::new(data.into_iter())));
+    let imgs = g.register(Node::input(Box::new(data.into_iter())));
+
     let k1 = g.new_param(&[3, 3, 1, 8]);
-    let conv1 = g.register(Node::conv(k1, data, Padding::Same));
-    let k2 = g.new_param(&[3, 3, 8, 16]);
+    let conv1 = g.register(Node::conv(k1, imgs, Padding::Same, 2));
     let relu1 = g.register(Node::relu(conv1));
-    let conv2 = g.register(Node::conv(k2, relu1, Padding::Same));
-    let _relu2 = g.register(Node::relu(conv2));
+
+    let k2 = g.new_param(&[3, 3, 8, 16]);
+    let conv2 = g.register(Node::conv(k2, relu1, Padding::Same, 2));
+    let relu2 = g.register(Node::relu(conv2));
+
+    let k3 = g.new_param(&[3, 3, 16, 32]);
+    let conv3 = g.register(Node::conv(k3, relu2, Padding::Same, 2));
+    let relu3 = g.register(Node::relu(conv3));
+
+    let k4 = g.new_param(&[1, 1, 32, 10]);
+    let conv4 = g.register(Node::conv(k4, relu3, Padding::Same, 1));
+    let _avgp = g.register(Node::global_pool(conv4, GlobalPool::Average));
+
+    // let softmax = g.register(Node::softmax(_avgp));
+    // let cross_entropy_loss g.register(Node::cross_entropy_loss(softmax, lbls));
 
     println!("Forward pass...");
     g.forward();
+    println!("Backwrad pass...");
+    g.backward();
     println!("{}", g);
-    // let avgp = g.register(Node::global_average_pool(relu2))
+
     // let smax = g.register(Node::softmax(avgp))
     // let tst_data = g.register(Node::input(Box::new(tst_lbl.into_iter())))
     // let loss = g.register(Node::cross_entropy_loss(avgp, tst_data))

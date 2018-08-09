@@ -59,7 +59,7 @@ impl fmt::Display for Graph {
         for (i, rtn) in self.nodes.iter().enumerate() {
             writeln!(
                 f,
-                "\n{}\t{:?}\n\tvalue shape: {:?}\n\tloss shape:  {:?}",
+                "\n{}\t{:?}\n\tvalue shape: {:?}\tloss shape:  {:?}",
                 i,
                 rtn.variant,
                 rtn.value.shape(),
