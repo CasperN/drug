@@ -22,6 +22,7 @@ mod global_pool;
 mod graph;
 mod node;
 mod optimizers;
+mod softmax;
 
 pub use conv::{Conv, Padding};
 pub use global_pool::GlobalPool;

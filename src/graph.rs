@@ -189,6 +189,7 @@ impl Graph {
 
                         for (grad, j) in gradients.iter().zip(inputs.iter()) {
                             // TODO make this support broadcasting
+                            // println!("loss {:?} grad {:?}", self.nodes[*j].loss, grad);
                             self.nodes[*j].loss += grad;
                         }
                     }

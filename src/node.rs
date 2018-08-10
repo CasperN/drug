@@ -3,6 +3,7 @@ use conv::{Conv, Padding};
 use global_pool::GlobalPool;
 use graph::Idx;
 use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
+use softmax::Softmax;
 use std::fmt::Debug;
 
 pub trait Operation: Debug {
@@ -64,6 +65,12 @@ impl Node {
         Node::Operation {
             inputs: vec![input],
             operation: Box::new(pool),
+        }
+    }
+    pub fn softmax(input: Idx) -> Self {
+        Node::Operation {
+            inputs: vec![input],
+            operation: Box::new(Softmax()),
         }
     }
 }
