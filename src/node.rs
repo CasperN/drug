@@ -27,15 +27,13 @@ pub enum Node {
     // These versions of node differ in how the value is produced and how loss is propagated back
 
     // Produce Value from beyond the graph, ignore loss
-    Input {
-        #[debug_stub = "Box<dyn Iterator<Item = ArrayD<f32>>>"]
-        dataset: Box<Iterator<Item = ArrayD<f32>>>,
-    },
+
+    Input(
+        #[debug_stub = "Input"]
+        Box<Iterator<Item = ArrayD<f32>>>),
 
     // Value is initialized at the start of the graph, loss is applied to value through optimizer
-    Parameter {
-        optimizer: Box<Optimizer>,
-    },
+    Parameter(Box<[usize]>),
 
     // Value is determined by input values of other nodes and operation
     // Loss is propagated backwards and update the loss field of inputs
@@ -46,9 +44,6 @@ pub enum Node {
 }
 impl Node {
     // Maybe just have only one field and call directly?
-    pub fn input(dataset: Box<Iterator<Item = ArrayD<f32>>>) -> Self {
-        Node::Input { dataset }
-    }
     pub fn relu(x: Idx) -> Self {
         Node::Operation {
             inputs: vec![x],

@@ -26,7 +26,7 @@ mod optimizers;
 
 pub use conv::{Conv, Padding};
 pub use global_pool::GlobalPool;
-pub use graph::{Graph, RuntimeNode};
+pub use graph::*;
 pub use node::{Node, Operation, Optimizer};
 
 // TODO initializers file
@@ -66,6 +66,6 @@ mod tests {
     fn test_param_initialize() {
         let mut g = Graph::default();
         assert_eq!(0, g.new_param(&[3, 3, 1, 8]));
-        assert_eq!(g.nodes[0].value.shape(), [3, 3, 1, 8]);
+        assert_eq!(g.values[0].shape(), [3, 3, 1, 8]);
     }
 }

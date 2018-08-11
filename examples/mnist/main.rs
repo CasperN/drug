@@ -53,7 +53,7 @@ fn main() {
     println!("Building graph...");
     let mut g = Graph::default();
 
-    let imgs = g.register(Node::input(train_images));
+    let imgs = g.register(Node::Input(train_images));
     let weights_1 = g.new_param(&[784, 110]);
     let weights_2 = g.new_param(&[110, 10]);
     let mat_mul_1 = g.register(Node::mat_mul(weights_1, imgs));
@@ -62,14 +62,15 @@ fn main() {
     let sigmoid_2 = g.register(Node::sigmoid(mat_mul_2));
     let out = sigmoid_2;
 
+
     println!("Training...");
     for step in 0..train_steps {
         g.forward();
 
         let labels = &train_labels[step * batch_size..(step + 1) * batch_size];
-        let (loss, grad) = softmax_cross_entropy_loss(g.nodes[out].value.view(), labels);
+        let (loss, grad) = softmax_cross_entropy_loss(g.values[out].view(), labels);
 
-        g.nodes[out].loss = -grad * learning_rate;
+        g.losses[out] = -grad * learning_rate;
         g.backward();
 
         if step % 500 == 0 {
@@ -78,14 +79,14 @@ fn main() {
     }
 
     // old input node exhausted, refresh with test images
-    g.nodes[imgs] = Node::input(test_images).into();
+    g.nodes[imgs] = Node::Input(test_images);
     let test_steps = TS_LEN as usize / batch_size;
     let mut num_correct = 0;
     println!("Testing...");
     for step in 0..test_steps {
         g.forward();
         let labels = &test_labels[step * batch_size..(step + 1) * batch_size];
-        num_correct += count_correct(g.nodes[out].value.view(), labels);
+        num_correct += count_correct(g.values[out].view(), labels);
     }
     println!(
         "Test accuracy: {:?}%",
