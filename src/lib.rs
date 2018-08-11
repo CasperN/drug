@@ -37,9 +37,9 @@ pub use graph::*;
 pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
     // let len: usize = shape.iter().product();
     let (n_in, n_out) = match shape.len() {
-        4 => (shape[2], shape[3]),  // Convolution kernel
-        2 => (shape[0], shape[1]),  // Matrix
-        _ => unimplemented!()
+        4 => (shape[2], shape[3]), // Convolution kernel
+        2 => (shape[0], shape[1]), // Matrix
+        _ => unimplemented!(),
     };
     let var = 2.0 / (n_in as f64 + n_out as f64);
     let normal = Normal::new(0.0, var.sqrt());

@@ -1,6 +1,5 @@
 use ndarray::{Array4, ArrayD, ArrayViewD, Ix4};
 use nodes::Operation;
-use std::cell::Cell;
 
 /// implements convolution [Operation](trait.Operation.html).
 /// See [Node](enum.Node.html) constructor for full description.
@@ -9,7 +8,6 @@ pub struct Conv {
     _dialation: usize,
     stride: (usize, usize),
     padding: Padding,
-    idx_ranges: Cell<[usize; 7]>,
 }
 
 /// Type of padding to use in a convolutional neural network. `No` padding means a non-strided
@@ -30,7 +28,6 @@ impl Default for Conv {
             _dialation: 1,
             stride: (1, 1),
             padding: Padding::Same,
-            idx_ranges: Cell::new([0; 7]),
         }
     }
 }
@@ -42,14 +39,22 @@ impl Conv {
             _dialation: 1,
             stride: (stride, stride),
             padding,
-            idx_ranges: Cell::new([0; 7]),
         }
     }
-
-    fn conv_point(&self, i: usize, j: usize, di: usize, dj: usize) -> Option<(usize, usize)> {
+    #[inline(always)]
+    fn conv_point(
+        &self,
+        n_i: usize,
+        n_j: usize,
+        n_di: usize,
+        n_dj: usize,
+        i: usize,
+        j: usize,
+        di: usize,
+        dj: usize,
+    ) -> Option<(usize, usize)> {
         // Returns the index of the point of the input image image multiplied by the Kernel
         // in the convolution.
-        let [_, n_i, n_j, n_di, n_dj, _, _] = self.idx_ranges.get();
         let kernel_offset_i = n_di >> 1;
         let kernel_offset_j = n_dj >> 1;
 
@@ -103,15 +108,25 @@ impl Operation for Conv {
                 Padding::No => ((n_i - n_di) / self.stride.0, (n_j - n_dj) / self.stride.1),
             };
 
-            self.idx_ranges
-                .set([*n_b, *n_i, *n_j, *n_di, *n_dj, *n_c0, *n_c1]);
-
             let mut output = Array4::zeros([*n_b, out_i, out_j, *n_c1]);
 
-            for (b, i, j, di, dj) in iproduct!(0..*n_b, 0..out_i, 0..out_j, 0..*n_di, 0..*n_dj) {
-                if let Some((ci, cj)) = self.conv_point(i, j, di, dj) {
-                    for (c0, c1) in iproduct!(0..*n_c0, 0..*n_c1) {
-                        output[(b, i, j, c1)] += kernel[(di, dj, c0, c1)] * image[(b, ci, cj, c0)];
+            for b in 0..*n_b {
+                for i in 0..out_i {
+                    for j in 0..out_j {
+                        for di in 0..*n_di {
+                            for dj in 0..*n_dj {
+                                if let Some((ci, cj)) =
+                                    self.conv_point(*n_i, *n_j, *n_di, *n_dj, i, j, di, dj)
+                                {
+                                    for c1 in 0..*n_c1 {
+                                        for c0 in 0..*n_c0 {
+                                            output[(b, i, j, c1)] +=
+                                                kernel[(di, dj, c0, c1)] * image[(b, ci, cj, c0)];
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -129,23 +144,49 @@ impl Operation for Conv {
         let image = inputs[1].view().into_dimensionality::<Ix4>().unwrap();
         let loss = loss.into_dimensionality::<Ix4>().unwrap();
 
-        let [n_b, n_i, n_j, n_di, n_dj, n_c0, n_c1] = self.idx_ranges.get();
-        let out_i = n_i / self.stride.0;
-        let out_j = n_j / self.stride.1;
+        if let ([n_di, n_dj, n_c0, n_c1], [n_b, n_i, n_j, n_c0_]) = (kernel.shape(), image.shape())
+        {
+            assert_eq!(
+                n_c0_, n_c0,
+                "number of channels in image do not match kernel's"
+            );
+            let out_i = n_i / self.stride.0;
+            let out_j = n_j / self.stride.1;
 
-        let mut grad_kernel = Array4::zeros([n_di, n_dj, n_c0, n_c1]);
-        let mut grad_image = Array4::zeros([n_b, n_i, n_j, n_c0]);
+            let mut grad_kernel = Array4::zeros([*n_di, *n_dj, *n_c0, *n_c1]);
+            let mut grad_image = Array4::zeros([*n_b, *n_i, *n_j, *n_c0]);
 
-        for (b, i, j, di, dj) in iproduct!(0..n_b, 0..out_i, 0..out_j, 0..n_di, 0..n_dj) {
-            if let Some((ci, cj)) = self.conv_point(i, j, di, dj) {
-                for (c0, c1) in iproduct!(0..n_c0, 0..n_c1) {
-                    grad_kernel[(di, dj, c0, c1)] += loss[(b, i, j, c1)] * image[(b, ci, cj, c0)];
-                    grad_image[(b, ci, cj, c0)] += loss[(b, i, j, c1)] * kernel[(di, dj, c0, c1)];
+            // Benchmarks suggests that iproduct is in fact not zero cost.
+            // I suspect that manually unrolling the loop or implementing blocking
+            // will further performance too.
+            for b in 0..*n_b {
+                for i in 0..out_i {
+                    for j in 0..out_j {
+                        for di in 0..*n_di {
+                            for dj in 0..*n_dj {
+                                if let Some((ci, cj)) =
+                                    self.conv_point(*n_i, *n_j, *n_di, *n_dj, i, j, di, dj)
+                                {
+                                    for c0 in 0..*n_c0 {
+                                        let img = image[(b, ci, cj, c0)];
+                                        let gi = &mut grad_image[(b, ci, cj, c0)];
+                                        for c1 in 0..*n_c1 {
+                                            let l = loss[(b, i, j, c1)];
+                                            let k = kernel[(di, dj, c0, c1)];
+                                            grad_kernel[(di, dj, c0, c1)] += l * img;
+                                            *gi += l * k;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            vec![grad_kernel.into_dyn(), grad_image.into_dyn()]
+        } else {
+            unreachable!()
         }
-
-        vec![grad_kernel.into_dyn(), grad_image.into_dyn()]
     }
 }
 
@@ -164,29 +205,29 @@ mod tests {
         let img = Array4::zeros([4, 4, 4, 1]).into_dyn();
         let c = Conv::new(Padding::Same, 1);
         c.eval(vec![ker.view(), img.view()]);
-        assert_eq!(c.idx_ranges.get(), [4, 4, 4, 3, 3, 1, 1]);
+
         assert_eq!(
-            c.conv_point(0, 0, 0, 0),
+            c.conv_point(4, 4, 3, 3, 0, 0, 0, 0),
             Some((0, 0)),
             "Top left going up and left"
         );
         assert_eq!(
-            c.conv_point(0, 3, 2, 2),
+            c.conv_point(4, 4, 3, 3, 0, 3, 2, 2),
             Some((1, 3)),
             "Top right going down and right"
         );
         assert_eq!(
-            c.conv_point(2, 2, 1, 1),
+            c.conv_point(4, 4, 3, 3, 2, 2, 1, 1),
             Some((2, 2)),
             "Center going center"
         );
         assert_eq!(
-            c.conv_point(3, 3, 0, 0),
+            c.conv_point(4, 4, 3, 3, 3, 3, 0, 0),
             Some((2, 2)),
             "Bottom right going up and left"
         );
         assert_eq!(
-            c.conv_point(3, 3, 0, 2),
+            c.conv_point(4, 4, 3, 3, 3, 3, 0, 2),
             Some((2, 3)),
             "Bottom right going down and left"
         );
