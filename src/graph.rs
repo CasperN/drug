@@ -1,8 +1,8 @@
-use std::fmt;
 use ndarray::{Array, ArrayD, ArrayViewD};
-use node::{Node, Optimizer};
+use nodes::Node;
+use std::fmt;
 
-use optimizers::SGD;
+use optimizers::{Optimizer, SGD};
 use xavier_initialize;
 
 pub type Idx = usize;
@@ -37,11 +37,13 @@ impl fmt::Display for Graph {
 
 // Shape information?
 impl Default for Graph {
+    /// xavier initializer and normal gradient descent
     fn default() -> Self {
         Graph::new(Box::new(xavier_initialize), Box::new(SGD()))
     }
 }
 
+/// A differentiable computation graph. You can provide your own initializer and optimizer
 impl Graph {
     pub fn new(initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>, optimizer: Box<Optimizer>) -> Self {
         Graph {
@@ -52,16 +54,18 @@ impl Graph {
             optimizer,
         }
     }
+    /// Inserts a parameter of the given shape and initializes the value using the graph's
+    /// initializer.
     pub fn new_param(&mut self, shape: &[usize]) -> Idx {
         self.nodes.push(Node::Parameter({
             let x: Vec<usize> = shape.iter().map(|x| *x).collect();
             x.into_boxed_slice()
-        }
-        ));
+        }));
         self.values.push((self.initializer)(shape));
         self.losses.push(Array::zeros(shape));
         self.nodes.len() - 1
     }
+    /// Inserts the node into the graph and returns the index
     pub fn register(&mut self, node: Node) -> Idx {
         self.nodes.push(node);
         self.values.push(Array::zeros([0; 4]).into_dyn());
@@ -78,7 +82,7 @@ impl Graph {
                         unimplemented!("TODO handle input exhaustion gracefully")
                     }
                 }
-                Node::Operation{
+                Node::Operation {
                     ref inputs,
                     ref mut operation,
                 } => {
@@ -94,18 +98,17 @@ impl Graph {
     pub fn backward(&mut self) {
         for i in (0..self.nodes.len()).rev() {
             match self.nodes[i] {
-                Node::Input(_) => {},
+                Node::Input(_) => {}
                 Node::Parameter(_) => {
-                    self.optimizer.apply_gradient(self.losses[i].view(), self.values[i].view_mut());
+                    self.optimizer
+                        .apply_gradient(self.losses[i].view(), self.values[i].view_mut());
                 }
                 Node::Operation {
                     ref inputs,
                     ref mut operation,
                 } => {
-                    let gradients = operation.grad(
-                        view_at_idxs(&inputs, &self.values),
-                        self.losses[i].view()
-                    );
+                    let gradients =
+                        operation.grad(view_at_idxs(&inputs, &self.values), self.losses[i].view());
                     for (grad, j) in gradients.iter().zip(inputs.iter()) {
                         self.losses[*j] += grad;
                     }
@@ -115,10 +118,7 @@ impl Graph {
     }
 }
 
-fn view_at_idxs<'a>(
-    indices: &Vec<Idx>,
-    nodes: &'a Vec<ArrayD<f32>>,
-) -> Vec<ArrayViewD<'a, f32>> {
+fn view_at_idxs<'a>(indices: &Vec<Idx>, nodes: &'a Vec<ArrayD<f32>>) -> Vec<ArrayViewD<'a, f32>> {
     let mut vals = Vec::new();
     for i in indices.iter() {
         vals.push(nodes[*i].view());

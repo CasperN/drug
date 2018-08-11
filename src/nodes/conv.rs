@@ -1,7 +1,9 @@
 use ndarray::{Array4, ArrayD, ArrayViewD, Ix4};
-use node::Operation;
+use nodes::Operation;
 use std::cell::Cell;
 
+/// implements convolution [Operation](trait.Operation.html).
+/// See [Node](enum.Node.html) constructor for full description.
 #[derive(Debug)]
 pub struct Conv {
     _dialation: usize,
@@ -10,6 +12,11 @@ pub struct Conv {
     idx_ranges: Cell<[usize; 7]>,
 }
 
+/// Type of padding to use in a convolutional neural network. `No` padding means a non-strided
+/// convolution will shrink by the dimensions of the kernel as pixels at the edge will not be the
+/// center of a convolution. `Same` padding allows for convolution of edge pixels by assuming
+/// the values beyond the images are equal to the edge. Other not implemented padding strategies
+/// are "Zero" padding or "Reflection" padding.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum Padding {

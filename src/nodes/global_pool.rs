@@ -1,9 +1,13 @@
 use ndarray::prelude::*;
-use node::Operation;
+use nodes::Operation;
 
 // TODO enum max pool, avg pool, sum pool, min pool
 #[derive(Debug)]
+/// Type of pooling operation (only supports average).
+/// Implements [Operation](trait.Operation.html).
+/// See [Node](enum.Node.html) constructor for full description.
 pub enum GlobalPool {
+    /// Reduces by taking the arithmetic mean
     Average,
 }
 

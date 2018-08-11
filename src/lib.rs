@@ -1,3 +1,14 @@
+//! # Differentiable Program
+//!
+//! This crate is a collection of utilities to build build neural networks (differentiable
+//! programs). It should be considered unstable until the following examples are completed as they
+//! have particular requirements that may force breaking changes.
+//!
+//! | Example                         |    Challenge
+//! |---------------------------------|--------------------------------------------------------
+//! | Recurrent Neural Networks       |   Dynamic graphs to handle variable length sequences
+//! | Generative Adversarial Networks |   Multiple objectives and updating only parts of the graph
+
 #![feature(test)]
 #[allow(unused_imports)]
 #[macro_use(s)] // s! is used in tests
@@ -15,29 +26,32 @@ use ndarray::prelude::*;
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 
-pub mod activation;
-
-mod conv;
-mod global_pool;
 mod graph;
-mod matmul;
-mod node;
+pub mod nodes;
+pub use nodes::{GlobalPool, Node, Padding};
 mod optimizers;
-
-pub use conv::{Conv, Padding};
-pub use global_pool::GlobalPool;
 pub use graph::*;
-pub use node::{Node, Operation, Optimizer};
 
 // TODO initializers file
+/// The default (and only provided) initializer. Only works with convolution kernels and matrices.
 pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
-    let len: usize = shape.iter().product();
-    let normal = Normal::new(0.0, 1.0 / len as f64);
+    // let len: usize = shape.iter().product();
+    let (n_in, n_out) = match shape.len() {
+        4 => (shape[2], shape[3]),  // Convolution kernel
+        2 => (shape[0], shape[1]),  // Matrix
+        _ => unimplemented!()
+    };
+    let var = 2.0 / (n_in as f64 + n_out as f64);
+    let normal = Normal::new(0.0, var.sqrt());
     let mut rng = thread_rng();
     ArrayD::from_shape_fn(shape, |_| normal.sample(&mut rng) as f32)
 }
 
-// TODO losses file
+/// A loss function used for classification.
+///
+/// `logits` are a `batch_size * num_classes` array of values which will be compressed into the
+/// `[0,1]` range by a softmax operation. Given the correct categories `labels`, this function will
+/// calculate the negative log-probability of the logits and its gradient with respect to the logits.
 pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[u8]) -> (f32, ArrayD<f32>) {
     let mut softmax = logits.to_owned().into_dimensionality::<Ix2>().unwrap();
     let mut log_loss = 0.0;

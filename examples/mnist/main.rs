@@ -8,7 +8,6 @@ extern crate ndarray;
 use diff::*;
 use ndarray::prelude::*;
 use std::path::Path;
-#[allow(dead_code)]
 mod input;
 use input::{images, labels};
 
@@ -22,23 +21,72 @@ static TS_LEN: u32 = 10_000;
 static ROWS: usize = 28;
 static COLS: usize = 28;
 
-fn into_dataset(
-    images: Vec<f32>,
-    len: usize,
-    batch_size: usize,
+fn reshape_and_iter(
+    data: Vec<f32>,    // The mnist data read from file
+    batch_size: usize, // how many mnist examples to train with in one forward / backward pass
+    as_vectors: bool,  // output vectors for a dense network instead of images for convolutional
 ) -> Box<Iterator<Item = ArrayD<f32>>> {
-    let images = Array::from_shape_vec([len, ROWS * COLS], images).unwrap();
-    let data = (0..len / batch_size).map(move |i| {
-        let idx = i * batch_size..(i + 1) * batch_size;
-        images.slice(s!(idx, ..)).to_owned().into_dyn()
-    });
-    Box::new(data)
+    let len = data.len() / ROWS / COLS;
+
+    if as_vectors {
+        // Iterate over dataset of batched vectors
+        let flattened = Array::from_shape_vec([len, ROWS * COLS], data).unwrap();
+        let vector_iterator = (0..len / batch_size).map(move |i| {
+            let idx = i * batch_size..(i + 1) * batch_size;
+            flattened.slice(s!(idx, ..)).to_owned().into_dyn()
+        });
+
+        Box::new(vector_iterator)
+    } else {
+        // Iterate over dataset of batched images
+        let images = Array::from_shape_vec([len, ROWS, COLS, 1], data).unwrap();
+
+        let image_iterator = (0..len / batch_size).map(move |i| {
+            let idx = i * batch_size..(i + 1) * batch_size;
+            images.slice(s!(idx, .., .., ..)).to_owned().into_dyn()
+        });
+
+        Box::new(image_iterator)
+    }
+}
+
+fn dense_network(g: &mut Graph) -> Idx {
+    let imgs = 0;
+    let weights_1 = g.new_param(&[784, 110]);
+    let weights_2 = g.new_param(&[110, 10]);
+    let mat_mul_1 = g.register(Node::mat_mul(weights_1, imgs));
+    let sigmoid_1 = g.register(Node::sigmoid(mat_mul_1));
+    let mat_mul_2 = g.register(Node::mat_mul(weights_2, sigmoid_1));
+    g.register(Node::sigmoid(mat_mul_2))
+}
+
+fn conv_network(g: &mut Graph) -> Idx {
+    let imgs = 0;
+
+    let conv_block = |g: &mut Graph, in_idx, in_channels, out_channels| {
+        // Repeating block of our cnn
+        let kernel = g.new_param(&[3, 3, in_channels, out_channels]);
+        let conv = g.register(Node::conv(kernel, in_idx, Padding::Same, 1));
+        let relu = g.register(Node::relu(conv));
+        relu
+    };
+
+    let b1 = conv_block(g, imgs, 1, 16);
+    let b2 = conv_block(g, b1, 16, 32);
+    let b3 = conv_block(g, b2, 32, 64);
+
+    let kernel_1x1 = g.new_param(&[1, 1, 64, 10]);
+    let conv_1x1 = g.register(Node::conv(kernel_1x1, b3, Padding::Same, 1));
+
+    g.register(Node::global_pool(conv_1x1, GlobalPool::Average))
 }
 
 fn main() {
     let learning_rate = 0.25;
     let batch_size = 8;
     let train_steps = TR_LEN as usize / batch_size;
+    let use_dense = true;
+    let summary_every = 500;
 
     println!("Reading data...",);
     let train_images = images(&Path::new(DATA).join(TR_IMG), TR_LEN);
@@ -46,22 +94,17 @@ fn main() {
     let test_images = images(&Path::new(DATA).join(TS_IMG), TS_LEN);
     let test_labels = labels(&Path::new(DATA).join(TS_LBL), TS_LEN);
 
-    // Convert Mnist data into ndarrays
-    let train_images = into_dataset(train_images, TR_LEN as usize, batch_size);
-    let test_images = into_dataset(test_images, TS_LEN as usize, batch_size);
-
     println!("Building graph...");
     let mut g = Graph::default();
 
+    let train_images = reshape_and_iter(train_images, batch_size, use_dense);
     let imgs = g.register(Node::Input(train_images));
-    let weights_1 = g.new_param(&[784, 110]);
-    let weights_2 = g.new_param(&[110, 10]);
-    let mat_mul_1 = g.register(Node::mat_mul(weights_1, imgs));
-    let sigmoid_1 = g.register(Node::sigmoid(mat_mul_1));
-    let mat_mul_2 = g.register(Node::mat_mul(weights_2, sigmoid_1));
-    let sigmoid_2 = g.register(Node::sigmoid(mat_mul_2));
-    let out = sigmoid_2;
 
+    let out = if use_dense {
+        dense_network(&mut g)
+    } else {
+        conv_network(&mut g)
+    };
 
     println!("Training...");
     for step in 0..train_steps {
@@ -73,15 +116,18 @@ fn main() {
         g.losses[out] = -grad * learning_rate;
         g.backward();
 
-        if step % 500 == 0 {
+        if step % summary_every == 0 {
             println!("  Step: {:?}\t log loss: {:?}", step, loss);
         }
     }
 
     // old input node exhausted, refresh with test images
+    let test_images = reshape_and_iter(test_images, batch_size, use_dense);
     g.nodes[imgs] = Node::Input(test_images);
+
     let test_steps = TS_LEN as usize / batch_size;
     let mut num_correct = 0;
+
     println!("Testing...");
     for step in 0..test_steps {
         g.forward();

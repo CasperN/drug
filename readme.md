@@ -13,9 +13,10 @@ rust.
 
 # TODO Now
 * Working Mnist example
-    * Refactor RuntimeGraph into Vec<node>, Vec<values> Vec<losses>
-    * Enum of allowed types for values and loss
-        * usize, ArrayD, Array2, Array4
+* Enum of allowed types for values and loss
+    * usize, ArrayD, Array2, Array4
+* Refactor Optimizer trait
+* Refactor `Vec<Idx>` to `Box<[Idx]>` to express shape immutability
 * Bias add
 * Matrix multiply
 

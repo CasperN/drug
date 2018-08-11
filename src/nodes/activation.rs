@@ -1,7 +1,8 @@
 use ndarray::{ArrayD, ArrayViewD};
-use node::Operation;
+use nodes::Operation;
 
-// LeakyRelu
+/// implements Relu [Operation](trait.Operation.html).
+/// See [Node](enum.Node.html) constructor for full description.
 #[derive(Debug)]
 pub struct Relu(pub f32);
 
@@ -23,6 +24,8 @@ impl Operation for Relu {
 }
 
 #[derive(Debug)]
+/// implements Sigmoid [Operation](trait.Operation.html)
+/// See [Node](enum.Node.html) constructor for full description.
 pub struct Sigmoid();
 
 fn sig(x: f32) -> f32 {

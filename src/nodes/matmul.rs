@@ -1,6 +1,8 @@
 use ndarray::prelude::*;
-use node::Operation;
+use nodes::Operation;
 
+/// implements matrix multiply [Operation](trait.Operation.html).
+/// See [Node](enum.Node.html) constructor for full description.
 #[derive(Debug)]
 pub struct MatMul();
 
