@@ -1,3 +1,5 @@
+use std::f32;
+
 extern crate byteorder;
 extern crate diff;
 #[macro_use(s)]
@@ -13,94 +15,100 @@ use input::{images, labels};
 static DATA: &'static str = "examples/data/";
 static TR_IMG: &'static str = "train-images-idx3-ubyte";
 static TR_LBL: &'static str = "train-labels-idx1-ubyte";
-// static TS_IMG: &'static str = "t10k-images-idx3-ubyte";
-// static TS_LBL: &'static str = "t10k-labels-idx1-ubyte";
+static TS_IMG: &'static str = "t10k-images-idx3-ubyte";
+static TS_LBL: &'static str = "t10k-labels-idx1-ubyte";
 static TR_LEN: u32 = 60_000;
-// static TS_LEN: u32 = 10_000;
-// static ROWS: usize = 28;
-// static COLS: usize = 28;
+static TS_LEN: u32 = 10_000;
+static ROWS: usize = 28;
+static COLS: usize = 28;
 
-fn main() {
-    println!("Reading data...",);
-    let tr_img = images(&Path::new(DATA).join(TR_IMG), TR_LEN);
-    let tr_lbl = labels(&Path::new(DATA).join(TR_LBL), TR_LEN);
-    // let ts_img = images(&Path::new(DATA).join(TS_IMG), TS_LEN);
-    // let _ts_lbl = labels(&Path::new(DATA).join(TS_LBL), TS_LEN);
-    println!("Data read...");
-
-    let batch_size = 32;
-
-    // Convert Mnist data into ndarrays
-    let tr_img = Array::from_shape_vec([TR_LEN as usize, 28, 28, 1], tr_img).unwrap();
-    let data = (0..1000).map(move |i| {
+fn into_dataset(
+    images: Vec<f32>,
+    len: usize,
+    batch_size: usize,
+) -> Box<Iterator<Item = ArrayD<f32>>> {
+    let images = Array::from_shape_vec([len, ROWS * COLS], images).unwrap();
+    let data = (0..len / batch_size).map(move |i| {
         let idx = i * batch_size..(i + 1) * batch_size;
-        tr_img.slice(s!(idx, .., .., ..)).to_owned().into_dyn()
+        images.slice(s!(idx, ..)).to_owned().into_dyn()
     });
-
-    // Build graph
-    println!("Building graph...");
-    let mut g = Graph::default();
-    let imgs = g.register(Node::input(Box::new(data.into_iter())));
-
-    let k1 = g.new_param(&[5, 5, 1, 8]);
-    let conv1 = g.register(Node::conv(k1, imgs, Padding::Same, 2));
-    let relu1 = g.register(Node::relu(conv1));
-
-    let k2 = g.new_param(&[5, 5, 8, 16]);
-    let conv2 = g.register(Node::conv(k2, relu1, Padding::Same, 2));
-    let relu2 = g.register(Node::relu(conv2));
-
-    // let k3 = g.new_param(&[3, 3, 16, 32]);
-    // let conv3 = g.register(Node::conv(k3, relu2, Padding::Same, 2));
-    // let relu3 = g.register(Node::relu(conv3));
-
-    let k4 = g.new_param(&[1, 1, 16, 10]);
-    let conv4 = g.register(Node::conv(k4, relu2, Padding::Same, 1));
-    let avgp = g.register(Node::global_pool(conv4, GlobalPool::Average));
-
-    let softmax = g.register(Node::softmax(avgp));
-
-    print!("Showing gradients:\nStep");
-    for i in 0..g.nodes.len() {
-        print!("\tNode {:?}     ", i);
-    }
-    println!("\n");
-
-    for step in 0..1000 {
-        print!("{:?}", step);
-        g.forward();
-
-        let labels = &tr_lbl[step * batch_size..(step + 1) * batch_size];
-
-        let losses = cross_entropy_loss(g.nodes[softmax].value.view(), labels);
-        let _loss = losses.scalar_sum();
-
-        g.nodes[softmax].loss = losses;
-        g.backward();
-
-        println!(
-            "{}",
-            g.nodes
-                .iter()
-                .map(|n| format!("\t{:.2e}   ", n.loss.mapv(|x| x * x).scalar_sum()))
-                .collect::<String>()
-        );
-    }
+    Box::new(data)
 }
 
-fn cross_entropy_loss(softmax: ArrayViewD<f32>, lbls: &[u8]) -> ArrayD<f32> {
-    let softmax = softmax.into_dimensionality::<Ix2>().unwrap();
-    let mut grad = Array::zeros(softmax.shape());
-    for (b, lbl) in lbls.iter().enumerate() {
-        let correct = *lbl as usize;
-        for i in 0..10 {
-            let idx = Dim([b, i]);
-            grad[idx] += if i == correct {
-                1.0 / (1.0 - softmax[idx])
-            } else {
-                1.0 / softmax[idx]
-            };
+fn main() {
+    let learning_rate = 0.25;
+    let batch_size = 8;
+    let train_steps = TR_LEN as usize / batch_size;
+
+    println!("Reading data...",);
+    let train_images = images(&Path::new(DATA).join(TR_IMG), TR_LEN);
+    let train_labels = labels(&Path::new(DATA).join(TR_LBL), TR_LEN);
+    let test_images = images(&Path::new(DATA).join(TS_IMG), TS_LEN);
+    let test_labels = labels(&Path::new(DATA).join(TS_LBL), TS_LEN);
+
+    // Convert Mnist data into ndarrays
+    let train_images = into_dataset(train_images, TR_LEN as usize, batch_size);
+    let test_images = into_dataset(test_images, TS_LEN as usize, batch_size);
+
+    println!("Building graph...");
+    let mut g = Graph::default();
+
+    let imgs = g.register(Node::input(train_images));
+    let weights_1 = g.new_param(&[784, 110]);
+    let weights_2 = g.new_param(&[110, 10]);
+    let mat_mul_1 = g.register(Node::mat_mul(weights_1, imgs));
+    let sigmoid_1 = g.register(Node::sigmoid(mat_mul_1));
+    let mat_mul_2 = g.register(Node::mat_mul(weights_2, sigmoid_1));
+    let sigmoid_2 = g.register(Node::sigmoid(mat_mul_2));
+    let out = sigmoid_2;
+
+    println!("Training...");
+    for step in 0..train_steps {
+        g.forward();
+
+        let labels = &train_labels[step * batch_size..(step + 1) * batch_size];
+        let (loss, grad) = softmax_cross_entropy_loss(g.nodes[out].value.view(), labels);
+
+        g.nodes[out].loss = -grad * learning_rate;
+        g.backward();
+
+        if step % 500 == 0 {
+            println!("  Step: {:?}\t log loss: {:?}", step, loss);
         }
     }
-    grad.into_dyn()
+
+    // old input node exhausted, refresh with test images
+    g.nodes[imgs] = Node::input(test_images).into();
+    let test_steps = TS_LEN as usize / batch_size;
+    let mut num_correct = 0;
+    println!("Testing...");
+    for step in 0..test_steps {
+        g.forward();
+        let labels = &test_labels[step * batch_size..(step + 1) * batch_size];
+        num_correct += count_correct(g.nodes[out].value.view(), labels);
+    }
+    println!(
+        "Test accuracy: {:?}%",
+        100.0 * num_correct as f32 / TS_LEN as f32
+    );
+}
+
+fn count_correct(logits: ArrayViewD<f32>, labels: &[u8]) -> u32 {
+    let logits = logits.to_owned().into_dimensionality::<Ix2>().unwrap();
+    let batch_size = labels.len();
+    let mut num_correct = 0;
+    for b in 0..batch_size {
+        let mut max = f32::MIN;
+        let mut max_idx = 0;
+        for i in 0..10 {
+            if logits[(b, i)] > max {
+                max = logits[(b, i)];
+                max_idx = i;
+            }
+        }
+        if max_idx == labels[b] as usize {
+            num_correct += 1;
+        }
+    }
+    num_correct
 }

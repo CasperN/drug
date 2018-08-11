@@ -1,9 +1,9 @@
-use activation;
+use activation::{Relu, Sigmoid};
 use conv::{Conv, Padding};
 use global_pool::GlobalPool;
 use graph::Idx;
+use matmul::MatMul;
 use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
-use softmax::Softmax;
 use std::fmt::Debug;
 
 pub trait Operation: Debug {
@@ -52,7 +52,7 @@ impl Node {
     pub fn relu(x: Idx) -> Self {
         Node::Operation {
             inputs: vec![x],
-            operation: Box::new(activation::Relu(0.0)),
+            operation: Box::new(Relu(0.0)),
         }
     }
     pub fn conv(kernel: Idx, img: Idx, padding: Padding, stride: usize) -> Self {
@@ -67,10 +67,16 @@ impl Node {
             operation: Box::new(pool),
         }
     }
-    pub fn softmax(input: Idx) -> Self {
+    pub fn sigmoid(input: Idx) -> Self {
         Node::Operation {
             inputs: vec![input],
-            operation: Box::new(Softmax()),
+            operation: Box::new(Sigmoid()),
+        }
+    }
+    pub fn mat_mul(weights: Idx, input: Idx) -> Self {
+        Node::Operation {
+            inputs: vec![weights, input],
+            operation: Box::new(MatMul()),
         }
     }
 }
