@@ -31,7 +31,7 @@ pub trait Operation: Debug {
 }
 
 #[derive(DebugStub)]
-/// Nodes are the building blocks of the computation graph.
+/// Nodes are the building blocks of the [computation graph](../struct.Graph.html).
 /// The variants of a node differ in how the value is produced and how loss is propagated back
 pub enum Node {
     /// Produce Value from beyond the graph.

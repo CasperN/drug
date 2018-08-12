@@ -11,13 +11,14 @@ pub type Idx = usize;
 /// composed of linked [`Nodes`](enum.Node.html).
 /// The default graph comes with an xavier initializer and normal stochastic grapdient descent
 /// initializer. The graph's `forward` and `backward` methods compute values and
-/// backpropagates losses respectively. See [Node](enum.Node.html) for what can be put in a graph.
+/// backpropagates losses respectively. This struct offers methods for easy construction
+/// and insertion of common nodes.
 ///
-/// ## Planned Features i.e. expect breaking changes (TODO):
-/// * Hide fields and allow indexing the graph itself directly so nodes, losses, and values are
-/// created and destroyed together despite living in different vectors. his allows the user to
-/// dynamically add and remove nodes while still being able to use the original indices. The
-/// current hack is to first register immutable parts of the graph like parameters.
+/// ## Planned Features:
+/// * **Breaking change:** Hide fields and allow indexing the graph itself directly so nodes,
+/// losses, and values are created and destroyed together despite living in different vectors. This
+/// should the user to dynamically add and remove nodes while still being able to use the original
+/// indices. The current hack is to first register immutable parts of the graph like parameters.
 /// * Naming and indexing via string
 /// * Saving / loading (need to distinguish parameters from other kinds of values)
 /// * Freezing part of the graph for training (particularly for GANs)
@@ -37,9 +38,9 @@ pub type Idx = usize;
 /// * Graph analysis and inlining operations
 #[derive(DebugStub)]
 pub struct Graph {
-    pub nodes: Vec<Node>,
-    pub values: Vec<ArrayD<f32>>,
-    pub losses: Vec<ArrayD<f32>>,
+    nodes: Vec<Node>,
+    values: Vec<ArrayD<f32>>,
+    losses: Vec<ArrayD<f32>>,
     #[debug_stub = "Initializer function"]
     initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>,
     optimizer: Box<Optimizer>,
@@ -71,6 +72,8 @@ impl Default for Graph {
 }
 
 impl Graph {
+    /// Consider using `Graph::default()` if you don't want to choose your own optimizer and
+    /// initializer.
     pub fn new(initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>, optimizer: Box<Optimizer>) -> Self {
         Graph {
             nodes: Vec::new(),
@@ -78,6 +81,23 @@ impl Graph {
             losses: Vec::new(),
             initializer,
             optimizer,
+        }
+    }
+    pub fn set_value(&mut self, idx: Idx, val: ArrayD<f32>){
+        self.values[idx] = val;
+    }
+    pub fn get_value(&mut self, idx: Idx) -> ArrayViewD<f32> {
+        self.values[idx].view()
+    }
+    pub fn set_loss(&mut self, idx: Idx, loss: ArrayD<f32>) {
+        self.losses[idx] = loss;
+    }
+    pub fn replace_input_iterator(&mut self, idx: Idx, new: Box<Iterator<Item = ArrayD<f32>>>) -> Result<(), String> {
+        if let Node::Input(ref mut old) = self.nodes[idx] {
+            *old = new;
+            Ok(())
+        } else {
+            Err("Tried to replace iterator in a node that was not input".to_string())
         }
     }
     /// Inserts the node into the graph and returns the index
@@ -107,10 +127,7 @@ impl Graph {
         };
         self.register(o)
     }
-    /// Registers a convolution operation that supports striding and padding.
-    /// * Input and output arrays are `Batch * Height * Width * Channels`. Though the number of
-    /// input and output channels may differ.
-    /// * Kernel shape is `Kernel_height * Kernel_width * Channels_in * Channels_out`.
+    /// Registers
     pub fn conv(&mut self, kernel: Idx, img: Idx, padding: Padding, stride: usize) -> Idx {
         self.op(Conv::new(padding, stride), &[kernel, img])
     }
@@ -136,7 +153,10 @@ impl Graph {
     pub fn matmul(&mut self, weights: Idx, input: Idx) -> Idx {
         self.op(MatMul(), &[weights, input])
     }
-    /// Computes values in insertion order.
+    /// Computes values for each node in insertion order.
+    /// Parameters are unaffected.
+    /// Inputs will set their value to the next output of their iterator,
+    /// Operations will compute a new value based on the values of its inputs.
     pub fn forward(&mut self) {
         for i in 0..self.nodes.len() {
             match self.nodes[i] {
@@ -161,6 +181,9 @@ impl Graph {
         }
     }
     /// Propagates gradients in reverse insertion order.
+    /// Parameters will apply gradients with the graph's optimizer.
+    /// Inputs are unaffected
+    /// Operations will compute gradient given values from their inputs and gradients from its outputs
     pub fn backward(&mut self) {
         for i in (0..self.nodes.len()).rev() {
             match self.nodes[i] {

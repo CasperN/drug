@@ -111,9 +111,9 @@ fn main() {
         g.forward();
 
         let labels = &train_labels[step * batch_size..(step + 1) * batch_size];
-        let (loss, grad) = softmax_cross_entropy_loss(g.values[out].view(), labels);
+        let (loss, grad) = softmax_cross_entropy_loss(g.get_value(out), labels);
 
-        g.losses[out] = -grad * learning_rate;
+        g.set_loss(out, -grad * learning_rate);
         g.backward();
 
         if step % summary_every == 0 {
@@ -123,7 +123,7 @@ fn main() {
 
     // old input node exhausted, refresh with test images
     let test_images = reshape_and_iter(test_images, batch_size, use_dense);
-    g.nodes[imgs] = Node::Input(test_images);
+    g.replace_input_iterator(imgs, test_images).unwrap();
 
     let test_steps = TS_LEN as usize / batch_size;
     let mut num_correct = 0;
@@ -132,7 +132,7 @@ fn main() {
     for step in 0..test_steps {
         g.forward();
         let labels = &test_labels[step * batch_size..(step + 1) * batch_size];
-        num_correct += count_correct(g.values[out].view(), labels);
+        num_correct += count_correct(g.get_value(out), labels);
     }
     println!(
         "Test accuracy: {:?}%",

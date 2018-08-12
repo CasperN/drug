@@ -1,8 +1,11 @@
 use ndarray::{Array4, ArrayD, ArrayViewD, Ix4};
 use nodes::Operation;
 
-/// implements convolution [Operation](trait.Operation.html).
-/// See [Node](enum.Node.html) constructor for full description.
+/// Implements convolution [Operation](trait.Operation.html) that supports striding and padding.
+/// It takes two arguments, `kernel`, and `input`. The output shape depends on striding, padding,
+/// and eventually dialation (not yet implemented).
+/// * `input ~ (Batch * Height * Width * Channels_in)`.
+/// * `kernel ~ (Kernel_height * Kernel_width * Channels_in * Channels_out)`.
 #[derive(Debug)]
 pub struct Conv {
     _dialation: usize,
