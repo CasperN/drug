@@ -1,4 +1,4 @@
-//! # ΔRuG --- Differentiable Rust Graph
+//! # ∂RuG --- Differentiable Rust Graph
 //!
 //! This crate is a collection of utilities to build build neural networks (differentiable
 //! programs). See examples source code for implementations of canonical neural networks.
@@ -18,7 +18,6 @@
 //! the process well enough yet to consider adding it to the library.
 
 #![feature(test)]
-#[allow(unused_imports)]
 #[macro_use(s)] // s! is used in tests
 pub extern crate ndarray;
 extern crate rand;
@@ -88,7 +87,7 @@ mod tests {
     #[test]
     fn test_param_initialize() {
         let mut g = Graph::default();
-        assert_eq!(0, g.param(&[3, 3, 1, 8]));
-        assert_eq!(g.values[0].shape(), [3, 3, 1, 8]);
+        let x = g.param(&[3, 3, 1, 8]);
+        assert_eq!(g.get_value(x).shape(), [3, 3, 1, 8]);
     }
 }

@@ -1,13 +1,16 @@
 use ndarray::{Array, ArrayD, ArrayViewD};
 use nodes::*;
+use std::collections::BTreeMap;
 use std::fmt;
 
 use optimizers::{Optimizer, SGD};
 use xavier_initialize;
 
-#[derive(Debug, Clone)]
-pub struct Idx{
-    insert_num: usize,
+/// A placeholder to help index into a graph. These should not be interchanged between graphs.
+/// That may work but its undefined behaviour.
+#[derive(Debug, Clone, Copy)]
+pub struct Idx {
+    idx: usize,
 }
 
 /// A differentiable computation graph. Use this struct to hold your differentiable program
@@ -18,10 +21,6 @@ pub struct Idx{
 /// and insertion of common nodes.
 ///
 /// ## Planned Features:
-/// * **Breaking change:** Hide fields and allow indexing the graph itself directly so nodes,
-/// losses, and values are created and destroyed together despite living in different vectors. This
-/// should the user to dynamically add and remove nodes while still being able to use the original
-/// indices. The current hack is to first register immutable parts of the graph like parameters.
 /// * Naming and indexing via string
 /// * Saving / loading (need to distinguish parameters from other kinds of values)
 /// * Freezing part of the graph for training (particularly for GANs)
@@ -41,9 +40,9 @@ pub struct Idx{
 /// * Graph analysis and inlining operations
 #[derive(DebugStub)]
 pub struct Graph {
-    nodes: Vec<Node>,
-    values: Vec<ArrayD<f32>>,
-    losses: Vec<ArrayD<f32>>,
+    nodes: BTreeMap<usize, Node>,
+    values: BTreeMap<usize, ArrayD<f32>>,
+    losses: BTreeMap<usize, ArrayD<f32>>,
     num_inserted: usize,
     #[debug_stub = "Initializer function"]
     initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>,
@@ -53,14 +52,14 @@ impl fmt::Display for Graph {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Customize so only `x` and `y` are denoted.
         writeln!(f, "Computation Graph with Optimizer: {:?}", self.optimizer)?;
-        for i in 0..self.nodes.len() {
+        for (i, node) in self.nodes.iter() {
             writeln!(
                 f,
                 "\n{}\t{:?}\n\tvalue shape: {:?}\tloss shape:  {:?}",
                 i,
-                self.nodes[i],
-                self.values[i].shape(),
-                self.losses[i].shape(),
+                node,
+                self.values[&i].shape(),
+                self.losses[&i].shape(),
             )?
         }
         Ok(())
@@ -80,30 +79,39 @@ impl Graph {
     /// initializer.
     pub fn new(initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>, optimizer: Box<Optimizer>) -> Self {
         Graph {
-            nodes: Vec::new(),
-            values: Vec::new(),
-            losses: Vec::new(),
+            nodes: BTreeMap::new(),
+            values: BTreeMap::new(),
+            losses: BTreeMap::new(),
             num_inserted: 0,
             initializer,
             optimizer,
         }
     }
     /// Remove the node at `idx` as well as its associated value and loss.
-    /// Tagged as unsafe because it invalidies previosly returned indices
-    pub unsafe fn remove(&mut self, idx: Idx){
-        unimplemented!()
+    pub fn remove(&mut self, idx: Idx) {
+        self.nodes.remove(&idx.idx);
+        self.values.remove(&idx.idx);
+        self.losses.remove(&idx.idx);
     }
-    pub fn set_value(&mut self, idx: Idx, val: ArrayD<f32>){
-        self.values[idx.insert_num] = val;
+    pub fn set_value(&mut self, idx: Idx, val: ArrayD<f32>) {
+        if let None = self.values.insert(idx.idx, val) {
+            panic!("Tried to set value at a removed index")
+        }
     }
     pub fn get_value(&mut self, idx: Idx) -> ArrayViewD<f32> {
-        self.values[idx.insert_num].view()
+        self.values[&idx.idx].view()
     }
     pub fn set_loss(&mut self, idx: Idx, loss: ArrayD<f32>) {
-        self.losses[idx.insert_num] = loss;
+        if let None = self.losses.insert(idx.idx, loss) {
+            panic!("Tried to set loss at a removed index")
+        }
     }
-    pub fn replace_input_iterator(&mut self, idx: Idx, new: Box<Iterator<Item = ArrayD<f32>>>) -> Result<(), String> {
-        if let Node::Input(ref mut old) = self.nodes[idx.insert_num] {
+    pub fn replace_input_iterator(
+        &mut self,
+        idx: Idx,
+        new: Box<Iterator<Item = ArrayD<f32>>>,
+    ) -> Result<(), String> {
+        if let Some(Node::Input(old)) = self.nodes.get_mut(&idx.idx) {
             *old = new;
             Ok(())
         } else {
@@ -112,23 +120,30 @@ impl Graph {
     }
     /// Inserts the node into the graph and returns the index
     pub fn register(&mut self, node: Node) -> Idx {
-        self.nodes.push(node);
-        self.values.push(Array::zeros([0; 4]).into_dyn());
-        self.losses.push(Array::zeros([0; 4]).into_dyn());
+        let idx = self.num_inserted;
+        self.nodes.insert(idx, node);
+        self.values
+            .insert(idx, Array::zeros(()).into_dyn());
+        self.losses
+            .insert(idx, Array::zeros(()).into_dyn());
         self.num_inserted += 1;
-        Idx { insert_num: self.num_inserted - 1 }
+        Idx { idx }
     }
     /// Inserts a parameter of the given shape and initializes the value using the graph's
     /// initializer.
     pub fn param(&mut self, shape: &[usize]) -> Idx {
-        self.nodes.push(Node::Parameter({
-            let x: Vec<usize> = shape.iter().map(|x| *x).collect();
-            x.into_boxed_slice()
-        }));
-        self.values.push((self.initializer)(shape));
-        self.losses.push(Array::zeros(shape));
+        let idx = self.num_inserted;
+        self.nodes.insert(
+            idx,
+            Node::Parameter({
+                let x: Vec<usize> = shape.iter().map(|x| *x).collect();
+                x.into_boxed_slice()
+            }),
+        );
+        self.values.insert(idx, (self.initializer)(shape));
+        self.losses.insert(idx, Array::zeros(shape));
         self.num_inserted += 1;
-        Idx { insert_num: self.num_inserted - 1 }
+        Idx { idx }
     }
     /// Registers an operation and its inputs
     pub fn op(&mut self, op: impl Operation + 'static, inputs: &[Idx]) -> Idx {
@@ -170,26 +185,26 @@ impl Graph {
     /// Inputs will set their value to the next output of their iterator,
     /// Operations will compute a new value based on the values of its inputs.
     pub fn forward(&mut self) {
-        for i in 0..self.nodes.len() {
-            match self.nodes[i] {
+        for (i, node) in self.nodes.iter_mut() {
+            match node {
                 Node::Input(ref mut dataset) => {
                     if let Some(v) = dataset.next() {
-                        self.values[i] = v;
+                        self.values.insert(*i, v);
                     } else {
                         unimplemented!("TODO handle input exhaustion gracefully")
                     }
                 }
                 Node::Operation {
                     ref inputs,
-                    ref mut operation,
+                    ref operation,
                 } => {
                     let v = operation.eval(view_at_idxs(&inputs, &self.values));
-                    self.values[i] = v;
+                    self.values.insert(*i, v);
                 }
                 Node::Parameter(_) => {}
             }
             // reset losses
-            self.losses[i] = Array::zeros(self.values[i].shape());
+            self.losses.insert(*i, Array::zeros(self.values[i].shape()));
         }
     }
     /// Propagates gradients in reverse insertion order.
@@ -197,21 +212,23 @@ impl Graph {
     /// Inputs are unaffected
     /// Operations will compute gradient given values from their inputs and gradients from its outputs
     pub fn backward(&mut self) {
-        for i in (0..self.nodes.len()).rev() {
-            match self.nodes[i] {
+        for (i, node) in self.nodes.iter_mut().rev() {
+            match node {
                 Node::Input(_) => {}
                 Node::Parameter(_) => {
-                    self.optimizer
-                        .apply_gradient(self.losses[i].view(), self.values[i].view_mut());
+                    self.optimizer.apply_gradient(
+                        self.losses[&i].view(),
+                        self.values.get_mut(i).unwrap().view_mut(),
+                    );
                 }
                 Node::Operation {
                     ref inputs,
-                    ref mut operation,
+                    ref operation,
                 } => {
                     let gradients =
-                        operation.grad(view_at_idxs(&inputs, &self.values), self.losses[i].view());
+                        operation.grad(view_at_idxs(&inputs, &self.values), self.losses[&i].view());
                     for (grad, j) in gradients.iter().zip(inputs.iter()) {
-                        self.losses[j.insert_num] += grad;
+                        self.losses.get_mut(&j.idx).map(|x| *x += grad);
                     }
                 }
             }
@@ -219,10 +236,13 @@ impl Graph {
     }
 }
 
-fn view_at_idxs<'a>(indices: &Vec<Idx>, nodes: &'a Vec<ArrayD<f32>>) -> Vec<ArrayViewD<'a, f32>> {
+fn view_at_idxs<'a>(
+    indices: &Vec<Idx>,
+    nodes: &'a BTreeMap<usize, ArrayD<f32>>,
+) -> Vec<ArrayViewD<'a, f32>> {
     let mut vals = Vec::new();
     for i in indices.iter() {
-        vals.push(nodes[i.insert_num].view());
+        vals.push(nodes[&i.idx].view());
     }
     vals
 }

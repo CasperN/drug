@@ -1,6 +1,6 @@
-//! This module holds the nodes that build a computation graph.
-//! For convenience, these can be added to the graph directly.
-//! See [Graph](../struct.Graph.html) for details.
+//! This module holds the different types nodes that exist in a computation graph.
+//! * See [Graph](../struct.Graph.html) for methods that create and register nodes.
+//! * See [Node](enum.Node.html) for the types of node available.
 
 pub use self::activation::*;
 pub use self::conv::Conv;

@@ -50,8 +50,7 @@ fn reshape_and_iter(
     }
 }
 
-fn dense_network(g: &mut Graph) -> Idx {
-    let imgs = 0;
+fn dense_network(g: &mut Graph, imgs: Idx) -> Idx {
     let weights_1 = g.param(&[784, 110]);
     let weights_2 = g.param(&[110, 10]);
     let mat_mul_1 = g.matmul(weights_1, imgs);
@@ -60,9 +59,7 @@ fn dense_network(g: &mut Graph) -> Idx {
     g.sigmoid(mat_mul_2)
 }
 
-fn conv_network(g: &mut Graph) -> Idx {
-    let imgs = 0;
-
+fn conv_network(g: &mut Graph, imgs: Idx) -> Idx {
     let conv_block = |g: &mut Graph, in_idx, in_channels, out_channels| {
         // Repeating block of our cnn
         let kernel = g.param(&[3, 3, in_channels, out_channels]);
@@ -101,10 +98,12 @@ fn main() {
     let imgs = g.register(Node::Input(train_images));
 
     let out = if use_dense {
-        dense_network(&mut g)
+        dense_network(&mut g, imgs)
     } else {
-        conv_network(&mut g)
+        conv_network(&mut g, imgs)
     };
+
+    println!("{}", g);
 
     println!("Training...");
     for step in 0..train_steps {
