@@ -8,7 +8,7 @@ pub struct Embedding {
 }
 
 impl Operation for Embedding {
-    fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32> {
+    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
         assert_eq!(inputs.len(), 2, "Embedding operation takes two inputs");
         let embedding = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
         let code = inputs[1].view().into_dimensionality::<Ix0>().unwrap();
@@ -17,7 +17,7 @@ impl Operation for Embedding {
         embedding.slice(s!(code, ..)).to_owned().into_dyn()
     }
 
-    fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         assert_eq!(inputs.len(), 2, "Embedding operation takes two inputs");
         let loss = loss.into_dimensionality::<Ix1>().unwrap();
         let embedding = inputs[0].view().into_dimensionality::<Ix2>().unwrap();

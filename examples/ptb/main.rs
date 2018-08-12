@@ -48,10 +48,10 @@ impl TextDataSet {
 struct ConvexCombine();
 #[allow(unused_variables)]
 impl nodes::Operation for ConvexCombine {
-    fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32> {
+    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
         unimplemented!()
     }
-    fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         unimplemented!()
     }
 }
@@ -60,10 +60,10 @@ impl nodes::Operation for ConvexCombine {
 struct Stack();
 #[allow(unused_variables)]
 impl nodes::Operation for Stack {
-    fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32> {
+    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
         unimplemented!()
     }
-    fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         unimplemented!()
     }
 }

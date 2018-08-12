@@ -7,7 +7,7 @@ use nodes::Operation;
 pub struct MatMul();
 
 impl Operation for MatMul {
-    fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32> {
+    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
         assert_eq!(inputs.len(), 2);
         let weights = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
         let neurons = inputs[1].view().into_dimensionality::<Ix2>().unwrap();
@@ -24,7 +24,7 @@ impl Operation for MatMul {
             x
         }).into_dyn()
     }
-    fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         assert_eq!(inputs.len(), 2);
         let weights = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
         let neurons = inputs[1].view().into_dimensionality::<Ix2>().unwrap();

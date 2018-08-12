@@ -89,7 +89,7 @@ impl Conv {
 
 impl Operation for Conv {
     #[allow(unused_mut)]
-    fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32> {
+    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
         assert!(
             inputs.len() == 2,
             "Convolution operation takes two arguments"
@@ -138,7 +138,7 @@ impl Operation for Conv {
             unreachable!()
         }
     }
-    fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         assert!(
             inputs.len() == 2,
             "Convolution operation takes two arguments"

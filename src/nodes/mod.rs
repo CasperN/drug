@@ -22,12 +22,12 @@ mod matmul;
 pub trait Operation: Debug {
     /// Mutates Outputs based on inputs.
     /// Future warning: TODO do this in place by passing references and slices`
-    fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32>;
+    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32>;
 
     /// Returns gradients of inputs wrt outputs.
     /// Note the inputs and output vectors should be the same length.
     /// Future warning: TODO do this in place by passing references and slices`
-    fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
+    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
 }
 
 #[derive(DebugStub)]
@@ -52,7 +52,7 @@ pub enum Node {
     /// * In a backward pass, gradients are calculated and losses are propagated backwards and added
     /// to the losses indexed by `inputs`.
     Operation {
-        inputs: Vec<Idx>,
+        inputs: Box<[Idx]>,
         operation: Box<Operation>,
     },
 }

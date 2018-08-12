@@ -150,7 +150,7 @@ impl Graph {
         // TODO Verify inputs
         let o = Node::Operation {
             operation: Box::new(op),
-            inputs: inputs.to_vec(),
+            inputs: inputs.to_vec().into_boxed_slice(),
         };
         self.register(o)
     }
@@ -237,12 +237,12 @@ impl Graph {
 }
 
 fn view_at_idxs<'a>(
-    indices: &Vec<Idx>,
+    indices: &Box<[Idx]>,
     nodes: &'a BTreeMap<usize, ArrayD<f32>>,
-) -> Vec<ArrayViewD<'a, f32>> {
+) -> Box<[ArrayViewD<'a, f32>]> {
     let mut vals = Vec::new();
     for i in indices.iter() {
         vals.push(nodes[&i.idx].view());
     }
-    vals
+    vals.into_boxed_slice()
 }
