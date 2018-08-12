@@ -1,8 +1,9 @@
 # What is this
 This is a package for writing differential programs (i.e. neural networks) in
-rust.
+rust. Check out the example `cargo run --example mnist --release`!
 
-# TODO Now
+
+#### TODO Now
 * GRU-RNN Example
     * Embedding layer
 * Refactor Operations
@@ -25,7 +26,7 @@ rust.
 * Bias add
 * Need to make CNN orders of magnitude more performant
 
-# TODO Future
+#### TODO Future
 * Saving and Loading
 * Ergonomics
     * Add groups of nodes at once e.g. (kernel, conv, bias, add, relu)

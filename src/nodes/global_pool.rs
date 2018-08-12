@@ -51,7 +51,7 @@ mod tests {
         let x = Array::from_shape_vec([2, 3, 4, 5], (0..120).map(|x| x as f32).collect()).unwrap();
         let g = GlobalPool::Average;
         let avg = g
-            .eval(vec![x.view().into_dyn()])
+            .eval(vec![x.view().into_dyn()].into_boxed_slice())
             .into_dimensionality::<Ix2>()
             .unwrap();
         assert_eq!(
@@ -69,7 +69,7 @@ mod tests {
         let losses = Array::ones([2, 5]).into_dyn();
         let g = GlobalPool::Average;
         let grad = g
-            .grad(vec![inputs.view().into_dyn()], losses.view())
+            .grad(vec![inputs.view().into_dyn()].into_boxed_slice(), losses.view())
             .pop()
             .unwrap();
         // .into_dimensionality::<Ix4>()
