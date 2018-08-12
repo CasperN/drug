@@ -7,18 +7,33 @@ use xavier_initialize;
 
 pub type Idx = usize;
 
-
-/// A differentiable computation graph. This holds the nodes, losses, and values that flow through
-/// a differentiable program. The graph's `forward` and `backward` methods compute values and
+/// A differentiable computation graph. Use this struct to hold your differentiable program
+/// composed of linked [`Nodes`](enum.Node.html).
+/// The default graph comes with an xavier initializer and normal stochastic grapdient descent
+/// initializer. The graph's `forward` and `backward` methods compute values and
 /// backpropagates losses respectively. See [Node](enum.Node.html) for what can be put in a graph.
 ///
-/// Planned features (TODO):
-/// * Saving / loading
+/// ## Planned Features i.e. expect breaking changes (TODO):
+/// * Hide fields and allow indexing the graph itself directly so nodes, losses, and values are
+/// created and destroyed together despite living in different vectors. his allows the user to
+/// dynamically add and remove nodes while still being able to use the original indices. The
+/// current hack is to first register immutable parts of the graph like parameters.
 /// * Naming and indexing via string
-/// * Freezing part of graph for training
-/// * Distinguishing parameters from other values for saving / etc
-/// * Multithreaded / distributed graphs (this would probably require higher structs)
+/// * Saving / loading (need to distinguish parameters from other kinds of values)
+/// * Freezing part of the graph for training (particularly for GANs)
+/// * Building complexes of nodes such as (conv + bias + relu) or RNN cells while allowing for
+/// parameter reuse
+///
+/// ## Wishlist
 /// * Running in a GPU (once rust gets real GPGPU support)
+/// * Automatic differentiation for things like wasserstien loss
+///     * Automatically derive backwards versions of primatives
+/// * A nice DSL overloading arithmetic operators and allowing you to implicitly build a graph
+/// with Idxs
+///     * Probably requires "Graph Cursor" structs that hold `Rc<Refcell<Graph>>` and a trait object
+///     Giving it suitable methods
+/// * Multithreaded / distributed graphs
+///     * Asyncronous training with periodic merging of weights
 /// * Graph analysis and inlining operations
 #[derive(DebugStub)]
 pub struct Graph {
@@ -56,7 +71,6 @@ impl Default for Graph {
     }
 }
 
-/// A differentiable computation graph. You can provide your own initializer and optimizer
 impl Graph {
     pub fn new(initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>, optimizer: Box<Optimizer>) -> Self {
         Graph {

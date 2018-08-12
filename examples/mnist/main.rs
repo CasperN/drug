@@ -54,9 +54,9 @@ fn dense_network(g: &mut Graph) -> Idx {
     let imgs = 0;
     let weights_1 = g.new_param(&[784, 110]);
     let weights_2 = g.new_param(&[110, 10]);
-    let mat_mul_1 = g.register(Node::mat_mul(weights_1, imgs));
+    let mat_mul_1 = g.register(Node::matmul(weights_1, imgs));
     let sigmoid_1 = g.register(Node::sigmoid(mat_mul_1));
-    let mat_mul_2 = g.register(Node::mat_mul(weights_2, sigmoid_1));
+    let mat_mul_2 = g.register(Node::matmul(weights_2, sigmoid_1));
     g.register(Node::sigmoid(mat_mul_2))
 }
 

@@ -8,6 +8,7 @@
 pub use self::activation::*;
 pub use self::conv::Conv;
 pub use self::conv::Padding;
+pub use self::embedding::Embedding;
 pub use self::global_pool::GlobalPool;
 pub use self::matmul::MatMul;
 use graph::Idx;
@@ -15,6 +16,7 @@ use ndarray::prelude::*;
 use std::fmt::Debug;
 mod activation;
 mod conv;
+mod embedding;
 mod global_pool;
 mod matmul;
 
@@ -22,12 +24,12 @@ mod matmul;
 /// Operations hold their own hyperparameters but not their parameters, values or losses.
 pub trait Operation: Debug {
     /// Mutates Outputs based on inputs.
-    /// Future warning: TODO consider eval in place by passing in `output: ArrayMutD<f32>`
+    /// Future warning: TODO do this in place by passing references and slices`
     fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32>;
 
     /// Returns gradients of inputs wrt outputs.
     /// Note the inputs and output vectors should be the same length.
-    /// Future warning: TODO consider doing it in place by padding in `losses: Vec<ArrayMutD>`
+    /// Future warning: TODO do this in place by passing references and slices`
     fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
 }
 
@@ -58,10 +60,12 @@ pub enum Node {
     },
 }
 
-/// The building blocks of a computation graph.
-
+/// The building blocks of a computation graph. Node methods are here to give a nicer interface for
+/// instantiating operations in the computation graph as the number of required arguments of an
+/// operation cannot be known at compile time.
 impl Node {
     /// Builds an operation node directly from a struct that implements Operation.
+    /// Prefer to use another method if implemented e.g. `Node::conv(kernel, img)`
     pub fn op(op: impl Operation + 'static, inputs: &[Idx]) -> Self {
         Node::Operation {
             operation: Box::new(op),
@@ -111,7 +115,7 @@ impl Node {
     /// Assumes the value at `weights` is a N * M 2D array
     /// and the value at `input` is a Batch * N 2D array.
     /// Output value is Batch * M 2D array.
-    pub fn mat_mul(weights: Idx, input: Idx) -> Self {
+    pub fn matmul(weights: Idx, input: Idx) -> Self {
         Node::Operation {
             inputs: vec![weights, input],
             operation: Box::new(MatMul()),
