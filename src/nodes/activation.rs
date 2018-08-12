@@ -47,3 +47,20 @@ impl Operation for Sigmoid {
         vec![res]
     }
 }
+
+#[derive(Debug)]
+pub struct Tanh();
+impl Operation for Tanh {
+    fn eval(&self, inputs: Vec<ArrayViewD<f32>>) -> ArrayD<f32> {
+        assert_eq!(inputs.len(), 1, "Tanh accepts 1 input");
+        inputs[0].mapv(|x| x.tanh())
+    }
+    fn grad(&self, inputs: Vec<ArrayViewD<f32>>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+        assert_eq!(inputs.len(), 1, "Tanh accepts one input");
+        let mut res = loss.to_owned();
+        res.zip_mut_with(&inputs[0], |l, i| {
+            *l *= 1.0 - i.tanh().powi(2);
+        });
+        vec![res]
+    }
+}

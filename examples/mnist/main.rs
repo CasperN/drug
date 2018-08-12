@@ -71,11 +71,11 @@ fn conv_network(g: &mut Graph) -> Idx {
         relu
     };
 
-    let b1 = conv_block(g, imgs, 1, 16);
-    let b2 = conv_block(g, b1, 16, 32);
-    let b3 = conv_block(g, b2, 32, 64);
+    let b1 = conv_block(g, imgs, 1, 8);
+    let b2 = conv_block(g, b1, 8, 16);
+    let b3 = conv_block(g, b2, 16, 32);
 
-    let kernel_1x1 = g.new_param(&[1, 1, 64, 10]);
+    let kernel_1x1 = g.new_param(&[1, 1, 32, 10]);
     let conv_1x1 = g.register(Node::conv(kernel_1x1, b3, Padding::Same, 1));
 
     g.register(Node::global_pool(conv_1x1, GlobalPool::Average))
@@ -85,7 +85,7 @@ fn main() {
     let learning_rate = 0.25;
     let batch_size = 8;
     let train_steps = TR_LEN as usize / batch_size;
-    let use_dense = true;
+    let use_dense = false;
     let summary_every = 500;
 
     println!("Reading data...",);

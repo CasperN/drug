@@ -2,27 +2,30 @@
 This is a package for writing differential programs (i.e. neural networks) in
 rust.
 
-
-# Done
-* Graph and Node architecture
-* conv
-* Relu, Sigmoid
-* average pooling
-* strided conv
-
-
 # TODO Now
-* Working Mnist example
-* Enum of allowed types for values and loss
-    * usize, ArrayD, Array2, Array4
-* Refactor Optimizer trait
-* Refactor `Vec<Idx>` to `Box<[Idx]>` to express shape immutability
+* GRU-RNN Example
+    * Embedding layer
+* Refactor Operations
+    * Box slice inputs and losses to reflect static length
+    ```
+    struct ForwardArg {
+        inputs: Box<[ArrayViewD<f32>]>,
+        value: Box<[ArrayViewMutD<f32>]>,
+    }
+    struct BackwardArg {
+        inputs: Box<[ArrayViewD<f32>]>,
+        losses: Box<[ArrayMutD<f32>]>,
+        value: ArrayViewD<f32>,
+    }
+    ```
+* Parameters need `n_in` and `n_out` for Xavier initialization
+* Refactor Optimizer trait / Adam Optimizer
+    * Needs to keep a map of parameters and keep associated information
+    * Register parameters
 * Bias add
-* Matrix multiply
-
+* Need to make CNN orders of magnitude more performant
 
 # TODO Future
-* GRU-RNN Example
 * Saving and Loading
 * Ergonomics
     * Add groups of nodes at once e.g. (kernel, conv, bias, add, relu)

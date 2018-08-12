@@ -7,6 +7,19 @@ use xavier_initialize;
 
 pub type Idx = usize;
 
+
+/// A differentiable computation graph. This holds the nodes, losses, and values that flow through
+/// a differentiable program. The graph's `forward` and `backward` methods compute values and
+/// backpropagates losses respectively. See [Node](enum.Node.html) for what can be put in a graph.
+///
+/// Planned features (TODO):
+/// * Saving / loading
+/// * Naming and indexing via string
+/// * Freezing part of graph for training
+/// * Distinguishing parameters from other values for saving / etc
+/// * Multithreaded / distributed graphs (this would probably require higher structs)
+/// * Running in a GPU (once rust gets real GPGPU support)
+/// * Graph analysis and inlining operations
 #[derive(DebugStub)]
 pub struct Graph {
     pub nodes: Vec<Node>,

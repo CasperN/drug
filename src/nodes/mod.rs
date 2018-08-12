@@ -5,7 +5,7 @@
 //! See the [impl Node](enum.Node.html) section.
 //! * For parameters, use the graph's new_parameter method.
 
-pub use self::activation::{Relu, Sigmoid};
+pub use self::activation::*;
 pub use self::conv::Conv;
 pub use self::conv::Padding;
 pub use self::global_pool::GlobalPool;
@@ -33,12 +33,12 @@ pub trait Operation: Debug {
 
 #[derive(DebugStub)]
 /// Nodes are the building blocks of the computation graph.
+/// The variants of a node differ in how the value is produced and how loss is propagated back
 pub enum Node {
-    // These versions of node differ in how the value is produced and how loss is propagated back
     /// Produce Value from beyond the graph.
     /// * In a forward pass, its value is updates by the iterator.
     /// * In a backward pass, its losses are currently calculated but unused.
-    Input(#[debug_stub = "Input"] Box<Iterator<Item = ArrayD<f32>>>),
+    Input(#[debug_stub = "Box<Iterator<Item=ArrayD<f32>>>"] Box<Iterator<Item = ArrayD<f32>>>),
 
     /// Parameter nodes only hold a shape. Its values are initialized when inserted into the graph
     /// using the graph's initializer.
@@ -62,18 +62,10 @@ pub enum Node {
 
 impl Node {
     /// Builds an operation node directly from a struct that implements Operation.
-    pub fn new_op(op: impl Operation + 'static, inputs: &[Idx]) -> Self {
+    pub fn op(op: impl Operation + 'static, inputs: &[Idx]) -> Self {
         Node::Operation {
             operation: Box::new(op),
             inputs: inputs.to_vec(),
-        }
-    }
-
-    /// A Relu returns the elementwise maximum of the input array and 0.
-    pub fn relu(x: Idx) -> Self {
-        Node::Operation {
-            inputs: vec![x],
-            operation: Box::new(Relu(0.0)),
         }
     }
     /// Convolution operation that supports striding and padding.
@@ -94,12 +86,25 @@ impl Node {
             operation: Box::new(pool),
         }
     }
+    /// A Relu returns the elementwise maximum of the input array and 0.
+    pub fn relu(x: Idx) -> Self {
+        Node::Operation {
+            inputs: vec![x],
+            operation: Box::new(Relu(0.0)),
+        }
+    }
     /// Returns a new sigmoid activation operation, an
     /// elementwise application of $\frac{ 1 }{1 - e^{-x}}$.
     pub fn sigmoid(input: Idx) -> Self {
         Node::Operation {
             inputs: vec![input],
             operation: Box::new(Sigmoid()),
+        }
+    }
+    pub fn tanh(input: Idx) -> Self {
+        Node::Operation {
+            inputs: vec![input],
+            operation: Box::new(Tanh()),
         }
     }
     /// Returns a new matrix multiply operation.

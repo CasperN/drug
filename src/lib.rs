@@ -1,13 +1,22 @@
 //! # Differentiable Program
 //!
 //! This crate is a collection of utilities to build build neural networks (differentiable
-//! programs). It should be considered unstable until the following examples are completed as they
+//! programs). See examples source code for implementations of canonical neural networks.
+//! This includes:
+//! * Mnist -- with dense networks
+//! * Mnist -- with convolutional neural networks (though embarassingly slowly)
+//!
+//! This library should be considered unstable until the following examples are completed as they
 //! have particular requirements that may force breaking changes.
 //!
 //! | Example                         |    Challenge
 //! |---------------------------------|--------------------------------------------------------
 //! | Recurrent Neural Networks       |   Dynamic graphs to handle variable length sequences
 //! | Generative Adversarial Networks |   Multiple objectives and updating only parts of the graph
+//!
+//! Reinforcement learning applications may also challenge the archiecture but I don't understand
+//! the process well enough yet to consider adding it to the library.
+
 
 #![feature(test)]
 #[allow(unused_imports)]
@@ -18,7 +27,7 @@ extern crate test;
 #[macro_use]
 extern crate debug_stub_derive;
 
-#[macro_use(iproduct)]
+// #[macro_use(iproduct)]
 extern crate itertools;
 
 // pub use ndarray;
