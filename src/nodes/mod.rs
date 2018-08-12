@@ -1,9 +1,6 @@
 //! This module holds the nodes that build a computation graph.
-//! * Node::Input(...) should be used to put boxed iterators into the graph
-//! * The preferred way of creating operations is with `Node::operation(...)`.
-//! This is easier than assembling the Node enum manually.
-//! See the [impl Node](enum.Node.html) section.
-//! * For parameters, use the graph's new_parameter method.
+//! For convenience, these can be added to the graph directly.
+//! See [Graph](../struct.Graph.html) for details.
 
 pub use self::activation::*;
 pub use self::conv::Conv;
@@ -58,67 +55,4 @@ pub enum Node {
         inputs: Vec<Idx>,
         operation: Box<Operation>,
     },
-}
-
-/// The building blocks of a computation graph. Node methods are here to give a nicer interface for
-/// instantiating operations in the computation graph as the number of required arguments of an
-/// operation cannot be known at compile time.
-impl Node {
-    /// Builds an operation node directly from a struct that implements Operation.
-    /// Prefer to use another method if implemented e.g. `Node::conv(kernel, img)`
-    pub fn op(op: impl Operation + 'static, inputs: &[Idx]) -> Self {
-        Node::Operation {
-            operation: Box::new(op),
-            inputs: inputs.to_vec(),
-        }
-    }
-    /// Convolution operation that supports striding and padding.
-    /// * Input and output arrays are `Batch * Height * Width * Channels`. Though the number of
-    /// input and output channels may differ.
-    /// * Kernel shape is `Kernel_height * Kernel_width * Channels_in * Channels_out`
-    pub fn conv(kernel: Idx, img: Idx, padding: Padding, stride: usize) -> Self {
-        Node::Operation {
-            inputs: vec![kernel, img],
-            operation: Box::new(Conv::new(padding, stride)),
-        }
-    }
-    /// A pooling operation takes a `Batch * Height * Width * Channels` image and reduces it to
-    /// a `Batch * Channels` vector.
-    pub fn global_pool(input: Idx, pool: GlobalPool) -> Self {
-        Node::Operation {
-            inputs: vec![input],
-            operation: Box::new(pool),
-        }
-    }
-    /// A Relu returns the elementwise maximum of the input array and 0.
-    pub fn relu(x: Idx) -> Self {
-        Node::Operation {
-            inputs: vec![x],
-            operation: Box::new(Relu(0.0)),
-        }
-    }
-    /// Returns a new sigmoid activation operation, an
-    /// elementwise application of $\frac{ 1 }{1 - e^{-x}}$.
-    pub fn sigmoid(input: Idx) -> Self {
-        Node::Operation {
-            inputs: vec![input],
-            operation: Box::new(Sigmoid()),
-        }
-    }
-    pub fn tanh(input: Idx) -> Self {
-        Node::Operation {
-            inputs: vec![input],
-            operation: Box::new(Tanh()),
-        }
-    }
-    /// Returns a new matrix multiply operation.
-    /// Assumes the value at `weights` is a N * M 2D array
-    /// and the value at `input` is a Batch * N 2D array.
-    /// Output value is Batch * M 2D array.
-    pub fn matmul(weights: Idx, input: Idx) -> Self {
-        Node::Operation {
-            inputs: vec![weights, input],
-            operation: Box::new(MatMul()),
-        }
-    }
 }

@@ -1,5 +1,5 @@
 use ndarray::{Array, ArrayD, ArrayViewD};
-use nodes::Node;
+use nodes::*;
 use std::fmt;
 
 use optimizers::{Optimizer, SGD};
@@ -40,7 +40,6 @@ pub struct Graph {
     pub nodes: Vec<Node>,
     pub values: Vec<ArrayD<f32>>,
     pub losses: Vec<ArrayD<f32>>,
-
     #[debug_stub = "Initializer function"]
     initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>,
     optimizer: Box<Optimizer>,
@@ -81,9 +80,16 @@ impl Graph {
             optimizer,
         }
     }
+    /// Inserts the node into the graph and returns the index
+    pub fn register(&mut self, node: Node) -> Idx {
+        self.nodes.push(node);
+        self.values.push(Array::zeros([0; 4]).into_dyn());
+        self.losses.push(Array::zeros([0; 4]).into_dyn());
+        self.nodes.len() - 1
+    }
     /// Inserts a parameter of the given shape and initializes the value using the graph's
     /// initializer.
-    pub fn new_param(&mut self, shape: &[usize]) -> Idx {
+    pub fn param(&mut self, shape: &[usize]) -> Idx {
         self.nodes.push(Node::Parameter({
             let x: Vec<usize> = shape.iter().map(|x| *x).collect();
             x.into_boxed_slice()
@@ -92,13 +98,45 @@ impl Graph {
         self.losses.push(Array::zeros(shape));
         self.nodes.len() - 1
     }
-    /// Inserts the node into the graph and returns the index
-    pub fn register(&mut self, node: Node) -> Idx {
-        self.nodes.push(node);
-        self.values.push(Array::zeros([0; 4]).into_dyn());
-        self.losses.push(Array::zeros([0; 4]).into_dyn());
-        self.nodes.len() - 1
+    /// Registers an operation and its inputs
+    pub fn op(&mut self, op: impl Operation + 'static, inputs: &[Idx]) -> Idx {
+        // TODO Verify inputs
+        let o = Node::Operation {
+            operation: Box::new(op),
+            inputs: inputs.to_vec(),
+        };
+        self.register(o)
     }
+    /// Registers a convolution operation that supports striding and padding.
+    /// * Input and output arrays are `Batch * Height * Width * Channels`. Though the number of
+    /// input and output channels may differ.
+    /// * Kernel shape is `Kernel_height * Kernel_width * Channels_in * Channels_out`.
+    pub fn conv(&mut self, kernel: Idx, img: Idx, padding: Padding, stride: usize) -> Idx {
+        self.op(Conv::new(padding, stride), &[kernel, img])
+    }
+    /// Registers a pooling operation takes a `Batch * Height * Width * Channels` image and reduces it to
+    /// a `Batch * Channels` vector.
+    pub fn global_pool(&mut self, input: Idx, pool: GlobalPool) -> Idx {
+        self.op(pool, &[input])
+    }
+    /// Registers a Relu operation which takes the elementwise maximum of the input array and 0.
+    pub fn relu(&mut self, x: Idx) -> Idx {
+        self.op(Relu(0.0), &[x])
+    }
+    /// Registers a new sigmoid activation operation, an
+    /// elementwise application of $\frac{ 1 }{1 - e^{-x}}$.
+    pub fn sigmoid(&mut self, x: Idx) -> Idx {
+        self.op(Sigmoid(), &[x])
+    }
+    /// Registers a Tanh operation.
+    pub fn tanh(&mut self, x: Idx) -> Idx {
+        self.op(Tanh(), &[x])
+    }
+    /// Registers a matrix multiplication of `input` by `weights`.
+    pub fn matmul(&mut self, weights: Idx, input: Idx) -> Idx {
+        self.op(MatMul(), &[weights, input])
+    }
+    /// Computes values in insertion order.
     pub fn forward(&mut self) {
         for i in 0..self.nodes.len() {
             match self.nodes[i] {
@@ -122,6 +160,7 @@ impl Graph {
             self.losses[i] = Array::zeros(self.values[i].shape());
         }
     }
+    /// Propagates gradients in reverse insertion order.
     pub fn backward(&mut self) {
         for i in (0..self.nodes.len()).rev() {
             match self.nodes[i] {

@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn test_param_initialize() {
         let mut g = Graph::default();
-        assert_eq!(0, g.new_param(&[3, 3, 1, 8]));
+        assert_eq!(0, g.param(&[3, 3, 1, 8]));
         assert_eq!(g.values[0].shape(), [3, 3, 1, 8]);
     }
 }

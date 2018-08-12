@@ -52,12 +52,12 @@ fn reshape_and_iter(
 
 fn dense_network(g: &mut Graph) -> Idx {
     let imgs = 0;
-    let weights_1 = g.new_param(&[784, 110]);
-    let weights_2 = g.new_param(&[110, 10]);
-    let mat_mul_1 = g.register(Node::matmul(weights_1, imgs));
-    let sigmoid_1 = g.register(Node::sigmoid(mat_mul_1));
-    let mat_mul_2 = g.register(Node::matmul(weights_2, sigmoid_1));
-    g.register(Node::sigmoid(mat_mul_2))
+    let weights_1 = g.param(&[784, 110]);
+    let weights_2 = g.param(&[110, 10]);
+    let mat_mul_1 = g.matmul(weights_1, imgs);
+    let sigmoid_1 = g.sigmoid(mat_mul_1);
+    let mat_mul_2 = g.matmul(weights_2, sigmoid_1);
+    g.sigmoid(mat_mul_2)
 }
 
 fn conv_network(g: &mut Graph) -> Idx {
@@ -65,9 +65,9 @@ fn conv_network(g: &mut Graph) -> Idx {
 
     let conv_block = |g: &mut Graph, in_idx, in_channels, out_channels| {
         // Repeating block of our cnn
-        let kernel = g.new_param(&[3, 3, in_channels, out_channels]);
-        let conv = g.register(Node::conv(kernel, in_idx, Padding::Same, 1));
-        let relu = g.register(Node::relu(conv));
+        let kernel = g.param(&[3, 3, in_channels, out_channels]);
+        let conv = g.conv(kernel, in_idx, Padding::Same, 1);
+        let relu = g.relu(conv);
         relu
     };
 
@@ -75,17 +75,17 @@ fn conv_network(g: &mut Graph) -> Idx {
     let b2 = conv_block(g, b1, 8, 16);
     let b3 = conv_block(g, b2, 16, 32);
 
-    let kernel_1x1 = g.new_param(&[1, 1, 32, 10]);
-    let conv_1x1 = g.register(Node::conv(kernel_1x1, b3, Padding::Same, 1));
+    let kernel_1x1 = g.param(&[1, 1, 32, 10]);
+    let conv_1x1 = g.conv(kernel_1x1, b3, Padding::Same, 1);
 
-    g.register(Node::global_pool(conv_1x1, GlobalPool::Average))
+    g.global_pool(conv_1x1, GlobalPool::Average)
 }
 
 fn main() {
     let learning_rate = 0.25;
     let batch_size = 8;
     let train_steps = TR_LEN as usize / batch_size;
-    let use_dense = false;
+    let use_dense = true;
     let summary_every = 500;
 
     println!("Reading data...",);

@@ -81,24 +81,24 @@ fn main() {
 
     let mut g = Graph::default();
     // Declare weights
-    let embedding_weights = g.new_param(&[t.idx2char.len(), embedding_dim]);
-    let forget_weights = g.new_param(&[hidden_dim + embedding_dim, hidden_dim]);
-    let update_weights = g.new_param(&[hidden_dim + embedding_dim, hidden_dim]);
-    let pred_weights = g.new_param(&[hidden_dim, t.idx2char.len()]);
-    let hidden0 = g.new_param(&[hidden_dim]);
+    let embedding_weights = g.param(&[t.idx2char.len(), embedding_dim]);
+    let forget_weights = g.param(&[hidden_dim + embedding_dim, hidden_dim]);
+    let update_weights = g.param(&[hidden_dim + embedding_dim, hidden_dim]);
+    let pred_weights = g.param(&[hidden_dim, t.idx2char.len()]);
+    let hidden0 = g.param(&[hidden_dim]);
 
     // Convenience function to add a new GRU node.
     let add_gru_node = |graph: &mut Graph, hidden, word| {
-        let stacked = graph.register(Node::op(Stack(), &[hidden, word]));
+        let stacked = graph.op(Stack(), &[hidden, word]);
 
-        let f_matmul = graph.register(Node::matmul(forget_weights, stacked));
-        let f_sig = graph.register(Node::sigmoid(f_matmul));
+        let f_matmul = graph.matmul(forget_weights, stacked);
+        let f_sig = graph.sigmoid(f_matmul);
 
-        let u_matmul = graph.register(Node::matmul(update_weights, stacked));
-        let u_tanh = graph.register(Node::tanh(u_matmul));
+        let u_matmul = graph.matmul(update_weights, stacked);
+        let u_tanh = graph.tanh(u_matmul);
 
-        let new_hidden = graph.register(Node::op(ConvexCombine(), &[u_tanh, hidden, f_sig]));
-        let predictions = graph.register(Node::matmul(pred_weights, new_hidden));
+        let new_hidden = graph.op(ConvexCombine(), &[u_tanh, hidden, f_sig]);
+        let predictions = graph.matmul(pred_weights, new_hidden);
         (new_hidden, predictions)
     };
 
