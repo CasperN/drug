@@ -5,7 +5,10 @@ use std::fmt;
 use optimizers::{Optimizer, SGD};
 use xavier_initialize;
 
-pub type Idx = usize;
+#[derive(Debug, Clone)]
+pub struct Idx{
+    insert_num: usize,
+}
 
 /// A differentiable computation graph. Use this struct to hold your differentiable program
 /// composed of linked [`Nodes`](enum.Node.html).
@@ -41,6 +44,7 @@ pub struct Graph {
     nodes: Vec<Node>,
     values: Vec<ArrayD<f32>>,
     losses: Vec<ArrayD<f32>>,
+    num_inserted: usize,
     #[debug_stub = "Initializer function"]
     initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>,
     optimizer: Box<Optimizer>,
@@ -79,21 +83,27 @@ impl Graph {
             nodes: Vec::new(),
             values: Vec::new(),
             losses: Vec::new(),
+            num_inserted: 0,
             initializer,
             optimizer,
         }
     }
+    /// Remove the node at `idx` as well as its associated value and loss.
+    /// Tagged as unsafe because it invalidies previosly returned indices
+    pub unsafe fn remove(&mut self, idx: Idx){
+        unimplemented!()
+    }
     pub fn set_value(&mut self, idx: Idx, val: ArrayD<f32>){
-        self.values[idx] = val;
+        self.values[idx.insert_num] = val;
     }
     pub fn get_value(&mut self, idx: Idx) -> ArrayViewD<f32> {
-        self.values[idx].view()
+        self.values[idx.insert_num].view()
     }
     pub fn set_loss(&mut self, idx: Idx, loss: ArrayD<f32>) {
-        self.losses[idx] = loss;
+        self.losses[idx.insert_num] = loss;
     }
     pub fn replace_input_iterator(&mut self, idx: Idx, new: Box<Iterator<Item = ArrayD<f32>>>) -> Result<(), String> {
-        if let Node::Input(ref mut old) = self.nodes[idx] {
+        if let Node::Input(ref mut old) = self.nodes[idx.insert_num] {
             *old = new;
             Ok(())
         } else {
@@ -105,7 +115,8 @@ impl Graph {
         self.nodes.push(node);
         self.values.push(Array::zeros([0; 4]).into_dyn());
         self.losses.push(Array::zeros([0; 4]).into_dyn());
-        self.nodes.len() - 1
+        self.num_inserted += 1;
+        Idx { insert_num: self.num_inserted - 1 }
     }
     /// Inserts a parameter of the given shape and initializes the value using the graph's
     /// initializer.
@@ -116,7 +127,8 @@ impl Graph {
         }));
         self.values.push((self.initializer)(shape));
         self.losses.push(Array::zeros(shape));
-        self.nodes.len() - 1
+        self.num_inserted += 1;
+        Idx { insert_num: self.num_inserted - 1 }
     }
     /// Registers an operation and its inputs
     pub fn op(&mut self, op: impl Operation + 'static, inputs: &[Idx]) -> Idx {
@@ -199,7 +211,7 @@ impl Graph {
                     let gradients =
                         operation.grad(view_at_idxs(&inputs, &self.values), self.losses[i].view());
                     for (grad, j) in gradients.iter().zip(inputs.iter()) {
-                        self.losses[*j] += grad;
+                        self.losses[j.insert_num] += grad;
                     }
                 }
             }
@@ -210,7 +222,7 @@ impl Graph {
 fn view_at_idxs<'a>(indices: &Vec<Idx>, nodes: &'a Vec<ArrayD<f32>>) -> Vec<ArrayViewD<'a, f32>> {
     let mut vals = Vec::new();
     for i in indices.iter() {
-        vals.push(nodes[*i].view());
+        vals.push(nodes[i.insert_num].view());
     }
     vals
 }
