@@ -15,8 +15,8 @@ pub struct Idx {
 
 /// A differentiable computation graph. Use this struct to hold your differentiable program
 /// composed of linked [`Nodes`](enum.Node.html).
-/// The default graph comes with an xavier initializer and normal stochastic grapdient descent
-/// initializer. The graph's `forward` and `backward` methods compute values and
+/// The default graph comes with an xavier initializer and a vanilla stochastic gradient descent
+/// optimizer. The graph's `forward` and `backward` methods compute values and
 /// backpropagates losses respectively. This struct offers methods for easy construction
 /// and insertion of common nodes.
 ///
@@ -33,8 +33,8 @@ pub struct Idx {
 ///     * Automatically derive backwards versions of primatives
 /// * A nice DSL overloading arithmetic operators and allowing you to implicitly build a graph
 /// with Idxs
-///     * Probably requires "Graph Cursor" structs that hold `Rc<Refcell<Graph>>` and a trait object
-///     Giving it suitable methods
+///     * Probably requires "Graph Cursor" trait that hold `Rc<Refcell<Graph>>` with various
+///     implementations with methods that make sense to them.
 /// * Multithreaded / distributed graphs
 ///     * Asyncronous training with periodic merging of weights
 /// * Graph analysis and inlining operations
@@ -122,10 +122,8 @@ impl Graph {
     pub fn register(&mut self, node: Node) -> Idx {
         let idx = self.num_inserted;
         self.nodes.insert(idx, node);
-        self.values
-            .insert(idx, Array::zeros(()).into_dyn());
-        self.losses
-            .insert(idx, Array::zeros(()).into_dyn());
+        self.values.insert(idx, Array::zeros(()).into_dyn());
+        self.losses.insert(idx, Array::zeros(()).into_dyn());
         self.num_inserted += 1;
         Idx { idx }
     }
@@ -180,6 +178,11 @@ impl Graph {
     pub fn matmul(&mut self, weights: Idx, input: Idx) -> Idx {
         self.op(MatMul(), &[weights, input])
     }
+    /// Registers an embedding later that converts A0 to vector representation
+    pub fn embedding(&mut self, weights: Idx, code: Idx) -> Idx {
+        self.op(Embedding(), &[weights, code])
+    }
+
     /// Computes values for each node in insertion order.
     /// Parameters are unaffected.
     /// Inputs will set their value to the next output of their iterator,
@@ -187,6 +190,7 @@ impl Graph {
     pub fn forward(&mut self) {
         for (i, node) in self.nodes.iter_mut() {
             match node {
+                Node::Constant => {}
                 Node::Input(ref mut dataset) => {
                     if let Some(v) = dataset.next() {
                         self.values.insert(*i, v);
@@ -214,6 +218,7 @@ impl Graph {
     pub fn backward(&mut self) {
         for (i, node) in self.nodes.iter_mut().rev() {
             match node {
+                Node::Constant => {}
                 Node::Input(_) => {}
                 Node::Parameter(_) => {
                     self.optimizer.apply_gradient(

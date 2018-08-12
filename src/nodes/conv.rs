@@ -325,7 +325,10 @@ mod tests {
         let orig = stripes(true);
         let conv = Conv::new(Padding::Same, 1);
         let eval = conv.eval(vec![identity_kernel.view(), orig.view()].into_boxed_slice());
-        let grad = conv.grad(vec![identity_kernel.view(), orig.view()].into_boxed_slice(), eval.view());
+        let grad = conv.grad(
+            vec![identity_kernel.view(), orig.view()].into_boxed_slice(),
+            eval.view(),
+        );
         assert_eq!(grad.len(), 2);
         let g_img = grad[1].view();
         assert_eq!(g_img, orig.view(), "backwards identity");
@@ -342,7 +345,10 @@ mod tests {
             for _ in 0..3 {
                 let img = Array4::from_shape_fn([4, 5, 5, 2], |_| unif.sample(&mut rng)).into_dyn();
                 conv.eval(vec![kernel.view(), img.view()].into_boxed_slice());
-                let grad = conv.grad(vec![kernel.view(), img.view()].into_boxed_slice(), img.view());
+                let grad = conv.grad(
+                    vec![kernel.view(), img.view()].into_boxed_slice(),
+                    img.view(),
+                );
                 let g_ker = grad[0].view();
                 kernel = kernel - g_ker
             }
@@ -369,7 +375,12 @@ mod tests {
         let img = xavier_initialize(&[1, 64, 64, 3]);
         let out = conv.eval(vec![kernel.view(), img.view()].into_boxed_slice());
 
-        b.iter(|| conv.grad(vec![kernel.view(), img.view()].into_boxed_slice(), out.view()));
+        b.iter(|| {
+            conv.grad(
+                vec![kernel.view(), img.view()].into_boxed_slice(),
+                out.view(),
+            )
+        });
     }
 
 }

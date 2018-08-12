@@ -3,9 +3,7 @@ use nodes::Operation;
 
 /// Pulls out an embedding vector given the index and
 #[derive(Debug)]
-pub struct Embedding {
-    len: usize,
-}
+pub struct Embedding();
 
 impl Operation for Embedding {
     fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {

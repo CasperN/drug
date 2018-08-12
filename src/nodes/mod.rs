@@ -55,4 +55,7 @@ pub enum Node {
         inputs: Box<[Idx]>,
         operation: Box<Operation>,
     },
+
+    /// Ignored by the graph, you have to set the values yourself
+    Constant,
 }
