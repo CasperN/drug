@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 
-extern crate diff;
-use diff::ndarray::prelude::*;
-use diff::*;
+extern crate drug;
+use drug::ndarray::prelude::*;
+use drug::*;
 
 static DATA_DIR: &'static str = "examples/data/";
 static TRAIN: &'static str = "ptb.train.txt";

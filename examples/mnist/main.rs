@@ -1,11 +1,11 @@
 use std::f32;
 
 extern crate byteorder;
-extern crate diff;
+extern crate drug;
 #[macro_use(s)]
 extern crate ndarray;
 
-use diff::*;
+use drug::*;
 use ndarray::prelude::*;
 use std::path::Path;
 mod input;
@@ -134,7 +134,7 @@ fn main() {
         num_correct += count_correct(g.get_value(out), labels);
     }
     println!(
-        "Test accuracy: {:?}%",
+        "  Test accuracy: {:?}%",
         100.0 * num_correct as f32 / TS_LEN as f32
     );
 }
