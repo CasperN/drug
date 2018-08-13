@@ -12,38 +12,65 @@ static DATA_DIR: &'static str = "examples/data/";
 static TRAIN: &'static str = "ptb.train.txt";
 use std::io::Read;
 
-#[derive(Default)]
+#[allow(dead_code)]
 struct TextDataSet {
     char2idx: HashMap<char, usize>,
     idx2char: Vec<char>,
-    train_corpus: Vec<Vec<usize>>,
-    // test_corpus: Vec<Vec<usize>,
+    corpus: Vec<Vec<ArrayD<f32>>>,
 }
 impl TextDataSet {
-    fn new() -> Self {
+    fn new(batch_size: usize) -> Self {
         let mut contents = String::new();
         let mut f = File::open(Path::new(DATA_DIR).join(TRAIN)).expect("train data not found");
         f.read_to_string(&mut contents)
             .expect("something went wrong reading the file");
 
-        let mut corpus = TextDataSet::default();
+        let mut coded_lines = Vec::new();
+        let mut char2idx = HashMap::new();
+        let mut idx2char = Vec::new();
 
-        for line in contents.lines() {
-            for c in line.chars() {
-                let mut line = Vec::new();
-                if corpus.char2idx.contains_key(&c) {
-                    let idx = corpus.char2idx.get(&c).unwrap();
+        for str_line in contents.lines() {
+            let mut line = Vec::new();
+
+            for c in str_line.chars() {
+                if char2idx.contains_key(&c) {
+                    let idx = char2idx.get(&c).unwrap();
                     line.push(*idx);
                 } else {
-                    let new_idx = corpus.idx2char.len();
-                    corpus.char2idx.insert(c, new_idx);
-                    corpus.idx2char.push(c);
+                    let new_idx = idx2char.len();
+                    char2idx.insert(c, new_idx);
+                    idx2char.push(c);
                     line.push(new_idx);
                 }
-                corpus.train_corpus.push(line);
             }
+            coded_lines.push(line);
         }
-        corpus
+        coded_lines.sort_by(|a, b| a.len().cmp(&b.len()));
+
+        let corpus = coded_lines
+            .chunks(batch_size)
+            .map(|chunk| {
+                let batch_len = chunk.len();
+                let sequence_len = chunk.last().unwrap().len();
+                (0..batch_len)
+                    .map(|b| {
+                        Array::from_shape_fn([sequence_len], |s| {
+                            if s < chunk[b].len() {
+                                chunk[b][s] as f32
+                            } else {
+                                char2idx[&' '] as f32
+                            }
+                        }).into_dyn()
+                    })
+                    .collect()
+            })
+            .collect();
+
+        TextDataSet {
+            corpus,
+            char2idx,
+            idx2char,
+        }
     }
 }
 #[derive(Debug)]
@@ -52,9 +79,18 @@ struct ConvexCombine();
 impl nodes::Operation for ConvexCombine {
     fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
         assert_eq!(inputs.len(), 3, "Convex combine takes 3 arguments x, y, a");
-        let mut x = inputs[0].to_owned().into_dimensionality::<Ix2>().unwrap();
-        let y = inputs[1].view().into_dimensionality::<Ix2>().unwrap();
-        let a = inputs[2].view().into_dimensionality::<Ix2>().unwrap();
+        let mut x = inputs[0]
+            .to_owned()
+            .into_dimensionality::<Ix2>()
+            .expect("Append x dim");
+        let y = inputs[1]
+            .view()
+            .into_dimensionality::<Ix2>()
+            .expect("Append y dim");
+        let a = inputs[2]
+            .view()
+            .into_dimensionality::<Ix2>()
+            .expect("Append a dim");
 
         azip!(mut x, a, y in { *x = a * *x + (1.0 - a) * y});
         x.into_dyn()
@@ -87,29 +123,47 @@ impl nodes::Operation for ConvexCombine {
         vec![x_grad.into_dyn(), y_grad.into_dyn(), a_grad.into_dyn()]
     }
 }
+// TODO call yasmeen 21:06
 
 #[derive(Debug)]
-struct Stack();
+struct Append();
 #[allow(unused_variables)]
-impl nodes::Operation for Stack {
+impl nodes::Operation for Append {
     fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
-        let x = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
-        let y = inputs[1].view().into_dimensionality::<Ix2>().unwrap();
+        // TODO this is failing because we are appending onto hidden0 which does not have a
+        // batch dimension
+        let x = inputs[0]
+            .view()
+            .into_dimensionality::<Ix2>()
+            .expect("Append x dim error");
+        let y = inputs[1]
+            .view()
+            .into_dimensionality::<Ix2>()
+            .expect("Append y dim error");
         let batch_size = x.shape()[0];
         assert_eq!(batch_size, y.shape()[0]);
-        let x_c = x.shape()[1];
-        let y_c = y.shape()[1];
+        let x_len = x.shape()[1];
+        let y_len = y.shape()[1];
 
-        Array::from_shape_fn([batch_size, x_c + y_c], |(b, i)| {
-            if i < x_c {
+        Array::from_shape_fn([batch_size, x_len + y_len], |(b, i)| {
+            if i < x_len {
                 x[(b, i)]
             } else {
-                y[(b, i - x_c)]
+                y[(b, i - x_len)]
             }
         }).into_dyn()
     }
     fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
-        unimplemented!()
+        let x = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
+        let y = inputs[1].view().into_dimensionality::<Ix2>().unwrap();
+        let loss = loss.into_dimensionality::<Ix2>().unwrap();
+        let batch_size = x.shape()[0];
+        assert_eq!(batch_size, y.shape()[0]);
+        assert_eq!(batch_size, loss.shape()[0]);
+        let (xlen, ylen) = (x.shape()[1], y.shape()[1]);
+        let x_grad = Array::from_shape_fn([batch_size, xlen], |(b, xi)| loss[(b, xi)]);
+        let y_grad = Array::from_shape_fn([batch_size, ylen], |(b, yi)| loss[(b, yi + xlen)]);
+        vec![x_grad.into_dyn(), y_grad.into_dyn()]
     }
 }
 
@@ -117,34 +171,33 @@ impl nodes::Operation for Stack {
 fn main() {
     let hidden_dim = 100;
     let embedding_dim = 6;
+    let learning_rate = 0.1;
+    let batch_size = 4;
 
-    let t = TextDataSet::new();
-
-    println!("{:?}", t.train_corpus.len());
-    println!("{:?}", t.char2idx);
-    println!("{:?}", t.idx2char);
+    let train = TextDataSet::new(batch_size);
 
     let mut g = Graph::default();
     // Declare weights
-    let embedding_weights = g.param(&[t.idx2char.len(), embedding_dim]);
+    let embedding_weights = g.param(&[train.idx2char.len(), embedding_dim]);
     let forget_weights = g.param(&[hidden_dim + embedding_dim, hidden_dim]);
     let update_weights = g.param(&[hidden_dim + embedding_dim, hidden_dim]);
-    let pred_weights = g.param(&[hidden_dim, t.idx2char.len()]);
+    let pred_weights = g.param(&[hidden_dim, train.idx2char.len()]);
     let hidden0 = g.param(&[hidden_dim]);
 
     // Convenience function to add a new GRU node.
+    // TODO sort by length of sequence, batching, padding if need be,
     // TODO matmul requires a batch dimension
-    let add_gru_node = |graph: &mut Graph, hidden, word: usize| {
-        // Stack word embedding on top of previous hidden state
+    let add_gru_node = |graph: &mut Graph, hidden, words: &ArrayD<f32>| {
+        // Append word embedding to previous hidden state
         let code = graph.register(Node::Constant);
-        graph.set_value(code, arr0(word as f32).into_dyn());
+        graph.set_value(code, words.to_owned());
         let emb = graph.embedding(embedding_weights, code);
-        let stacked = graph.op(Stack(), &[hidden, emb]);
+        let appended = graph.op(Append(), &[hidden, emb]);
         // Forget Gate
-        let f_matmul = graph.matmul(forget_weights, stacked);
+        let f_matmul = graph.matmul(forget_weights, appended);
         let f_sig = graph.sigmoid(f_matmul);
         // Update Gate
-        let u_matmul = graph.matmul(update_weights, stacked);
+        let u_matmul = graph.matmul(update_weights, appended);
         let u_tanh = graph.tanh(u_matmul);
         // Combine them and get predictions
         let new_hidden = graph.op(ConvexCombine(), &[u_tanh, hidden, f_sig]);
@@ -152,20 +205,23 @@ fn main() {
         (new_hidden, predictions)
     };
 
-    for line in t.train_corpus.iter() {
+    for line in train.corpus.iter() {
         let mut hidden = hidden0;
-        let mut predictions = vec![];
+        let mut output = vec![];
         for code in line.iter() {
-            let (hidden, pred) = add_gru_node(&mut g, hidden, *code);
-            predictions.push(pred);
+            let (hidden, pred) = add_gru_node(&mut g, hidden, code);
+            output.push((pred, code));
         }
         g.forward();
-        for c in line.iter() {
-            // Apply losses
-            unimplemented!()
+        let mut total_loss = 0.0;
+        for (pred, correct) in output.into_iter() {
+            let correct: Vec<usize> = correct.iter().map(|x| *x as usize).collect();
+
+            let (loss, grad) = softmax_cross_entropy_loss(g.get_value(pred), correct.as_slice());
+            total_loss += loss;
+            g.set_loss(pred, -grad * learning_rate)
         }
         g.backward();
-        // Remove everything but parameters
-        unimplemented!()
+        g.clear_non_parameters();
     }
 }

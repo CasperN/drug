@@ -139,7 +139,7 @@ fn main() {
     );
 }
 
-fn count_correct(logits: ArrayViewD<f32>, labels: &[u8]) -> u32 {
+fn count_correct(logits: ArrayViewD<f32>, labels: &[usize]) -> u32 {
     let logits = logits.to_owned().into_dimensionality::<Ix2>().unwrap();
     let batch_size = labels.len();
     let mut num_correct = 0;

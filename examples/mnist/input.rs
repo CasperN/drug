@@ -45,7 +45,7 @@ pub fn images(path: &Path, expected_length: u32) -> Vec<f32> {
         .collect()
 }
 
-pub fn labels(path: &Path, expected_length: u32) -> Vec<u8> {
+pub fn labels(path: &Path, expected_length: u32) -> Vec<usize> {
     let mut file =
         File::open(path).expect(&format!("Unable to find path to labels at {:?}.", path));
 
@@ -59,5 +59,5 @@ pub fn labels(path: &Path, expected_length: u32) -> Vec<u8> {
         .expect(&format!("Unable to length from {:?}.", path));
 
     assert!(expected_length == length, "Unexpected length");
-    file.bytes().map(|b| b.unwrap()).collect()
+    file.bytes().map(|b| b.unwrap() as usize).collect()
 }

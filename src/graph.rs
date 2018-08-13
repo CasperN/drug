@@ -87,6 +87,21 @@ impl Graph {
             optimizer,
         }
     }
+    pub fn clear_non_parameters(&mut self) {
+        let mut keys = Vec::new();
+        for (i, n) in self.nodes.iter() {
+            if let Node::Parameter(_) = n {
+                //pass
+            } else {
+                keys.push(*i);
+            }
+        }
+        for k in keys.into_iter() {
+            self.nodes.remove(&k);
+            self.values.remove(&k);
+            self.losses.remove(&k);
+        }
+    }
     /// Remove the node at `idx` as well as its associated value and loss.
     pub fn remove(&mut self, idx: Idx) {
         self.nodes.remove(&idx.idx);

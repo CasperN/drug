@@ -47,7 +47,8 @@ pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
     let (n_in, n_out) = match shape.len() {
         4 => (shape[2], shape[3]), // Convolution kernel
         2 => (shape[0], shape[1]), // Matrix
-        _ => unimplemented!(),
+        1 => (shape[0], shape[0]), // Vector
+        x => unimplemented!("Initialize with {:?}", x),
     };
     let var = 2.0 / (n_in as f64 + n_out as f64);
     let normal = Normal::new(0.0, var.sqrt());
@@ -60,7 +61,7 @@ pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
 /// `logits` are a `batch_size * num_classes` array of values which will be compressed into the
 /// `[0,1]` range by a softmax operation. Given the correct categories `labels`, this function will
 /// calculate the negative log-probability of the logits and its gradient with respect to the logits.
-pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[u8]) -> (f32, ArrayD<f32>) {
+pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[usize]) -> (f32, ArrayD<f32>) {
     let mut softmax = logits.to_owned().into_dimensionality::<Ix2>().unwrap();
     let mut log_loss = 0.0;
     // Calculate softmax
@@ -74,7 +75,7 @@ pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[u8]) -> (f3
     }
     // Turn softmax into gradient and add up log_loss
     for (b, lbl) in labels.iter().enumerate() {
-        let correct = *lbl as usize;
+        let correct = *lbl;
         log_loss -= softmax[(b, correct)].ln();
         softmax[(b, correct)] -= 1.0;
     }
