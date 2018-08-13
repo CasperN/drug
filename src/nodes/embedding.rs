@@ -35,6 +35,6 @@ impl Operation for Embedding {
                 grad[(code, d)] += loss[(b, d)]
             }
         }
-        vec![Array::zeros([]).into_dyn(), grad.into_dyn()]
+        vec![grad.into_dyn(), Array::zeros([]).into_dyn()]
     }
 }
