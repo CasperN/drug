@@ -5,17 +5,18 @@
 //! This includes:
 //! * Mnist -- with dense networks
 //! * Mnist -- with convolutional neural networks (though embarassingly slowly)
+//! * Penn TreeBank character prediction with gated recurrent units
 //!
 //! This library should be considered unstable until the following examples are completed as they
 //! have particular requirements that may force breaking changes.
 //!
 //! | Example                         |    Challenge
 //! |---------------------------------|--------------------------------------------------------
-//! | Recurrent Neural Networks       |   Dynamic graphs to handle variable length sequences
 //! | Generative Adversarial Networks |   Multiple objectives and updating only parts of the graph
 //!
 //! Reinforcement learning applications may also challenge the archiecture but I don't understand
 //! the process well enough yet to consider adding it to the library.
+// TODO Link to actual examples
 
 #![feature(test)]
 #[macro_use(s)] // s! is used in tests

@@ -14,13 +14,14 @@ pub struct Idx {
 }
 
 /// A differentiable computation graph. Use this struct to hold your differentiable program
-/// composed of linked [`Nodes`](enum.Node.html).
-/// The default graph comes with an xavier initializer and a vanilla stochastic gradient descent
-/// optimizer. The graph's `forward` and `backward` methods compute values and
-/// backpropagates losses respectively. This struct offers methods for easy construction
-/// and insertion of common nodes.
+/// which is a directed acyclic graph of [`Nodes`](enum.Node.html), their associated values
+/// and losses (gradients). The graph computes values moving forward in insertion order (see
+/// `forward` method) and propagates losses backwards in reverse insertion order (see `backward`
+/// method). The default graph comes with an xavier initializer and a vanilla stochastic gradient
+/// descent optimizer.
 ///
 /// ## Planned Features:
+/// * **Breaking change** Wrap Graph operations in results for better debugging
 /// * Naming and indexing via string
 /// * Saving / loading (need to distinguish parameters from other kinds of values)
 /// * Freezing part of the graph for training (particularly for GANs)
@@ -87,52 +88,6 @@ impl Graph {
             optimizer,
         }
     }
-    pub fn clear_non_parameters(&mut self) {
-        let mut keys = Vec::new();
-        for (i, n) in self.nodes.iter() {
-            if let Node::Parameter(_) = n {
-                //pass
-            } else {
-                keys.push(*i);
-            }
-        }
-        for k in keys.into_iter() {
-            self.nodes.remove(&k);
-            self.values.remove(&k);
-            self.losses.remove(&k);
-        }
-    }
-    /// Remove the node at `idx` as well as its associated value and loss.
-    pub fn remove(&mut self, idx: Idx) {
-        self.nodes.remove(&idx.idx);
-        self.values.remove(&idx.idx);
-        self.losses.remove(&idx.idx);
-    }
-    pub fn set_value(&mut self, idx: Idx, val: ArrayD<f32>) {
-        if let None = self.values.insert(idx.idx, val) {
-            panic!("Tried to set value at a removed index")
-        }
-    }
-    pub fn get_value(&mut self, idx: Idx) -> ArrayViewD<f32> {
-        self.values[&idx.idx].view()
-    }
-    pub fn set_loss(&mut self, idx: Idx, loss: ArrayD<f32>) {
-        if let None = self.losses.insert(idx.idx, loss) {
-            panic!("Tried to set loss at a removed index")
-        }
-    }
-    pub fn replace_input_iterator(
-        &mut self,
-        idx: Idx,
-        new: Box<Iterator<Item = ArrayD<f32>>>,
-    ) -> Result<(), String> {
-        if let Some(Node::Input(old)) = self.nodes.get_mut(&idx.idx) {
-            *old = new;
-            Ok(())
-        } else {
-            Err("Tried to replace iterator in a node that was not input".to_string())
-        }
-    }
     /// Inserts the node into the graph and returns the index
     pub fn register(&mut self, node: Node) -> Idx {
         let idx = self.num_inserted;
@@ -142,7 +97,7 @@ impl Graph {
         self.num_inserted += 1;
         Idx { idx }
     }
-    /// Inserts a parameter of the given shape and initializes the value using the graph's
+    /// Registers a parameter of the given shape and initializes the value using the graph's
     /// initializer.
     pub fn param(&mut self, shape: &[usize]) -> Idx {
         let idx = self.num_inserted;
@@ -166,36 +121,6 @@ impl Graph {
             inputs: inputs.to_vec().into_boxed_slice(),
         };
         self.register(o)
-    }
-    /// Registers
-    pub fn conv(&mut self, kernel: Idx, img: Idx, padding: Padding, stride: usize) -> Idx {
-        self.op(Conv::new(padding, stride), &[kernel, img])
-    }
-    /// Registers a pooling operation takes a `Batch * Height * Width * Channels` image and reduces it to
-    /// a `Batch * Channels` vector.
-    pub fn global_pool(&mut self, input: Idx, pool: GlobalPool) -> Idx {
-        self.op(pool, &[input])
-    }
-    /// Registers a Relu operation which takes the elementwise maximum of the input array and 0.
-    pub fn relu(&mut self, x: Idx) -> Idx {
-        self.op(Relu(0.0), &[x])
-    }
-    /// Registers a new sigmoid activation operation, an
-    /// elementwise application of $\frac{ 1 }{1 - e^{-x}}$.
-    pub fn sigmoid(&mut self, x: Idx) -> Idx {
-        self.op(Sigmoid(), &[x])
-    }
-    /// Registers a Tanh operation.
-    pub fn tanh(&mut self, x: Idx) -> Idx {
-        self.op(Tanh(), &[x])
-    }
-    /// Registers a matrix multiplication of `input` by `weights`.
-    pub fn matmul(&mut self, weights: Idx, input: Idx) -> Idx {
-        self.op(MatMul(), &[weights, input])
-    }
-    /// Registers an embedding later that converts A0 to vector representation
-    pub fn embedding(&mut self, weights: Idx, code: Idx) -> Idx {
-        self.op(Embedding(), &[weights, code])
     }
 
     /// Computes values for each node in insertion order.
@@ -253,6 +178,88 @@ impl Graph {
                 }
             }
         }
+    }
+    /// Remove the node at `idx` as well as its associated value and loss.
+    pub fn remove(&mut self, idx: Idx) {
+        self.nodes.remove(&idx.idx);
+        self.values.remove(&idx.idx);
+        self.losses.remove(&idx.idx);
+    }
+    /// This op removes every node from the graph that is not a parameter. This is useful for
+    /// dynamic graphs and recurrent neural networks when you want to rebuild everything each
+    /// forward and backward pass of the network.
+    pub fn clear_non_parameters(&mut self) {
+        let mut keys = Vec::new();
+        for (i, n) in self.nodes.iter() {
+            if let Node::Parameter(_) = n {
+                //pass
+            } else {
+                keys.push(*i);
+            }
+        }
+        for k in keys.into_iter() {
+            self.nodes.remove(&k);
+            self.values.remove(&k);
+            self.losses.remove(&k);
+        }
+    }
+    pub fn set_value(&mut self, idx: Idx, val: ArrayD<f32>) {
+        if let None = self.values.insert(idx.idx, val) {
+            panic!("Tried to set value at a removed index")
+        }
+    }
+    pub fn get_value(&mut self, idx: Idx) -> ArrayViewD<f32> {
+        self.values[&idx.idx].view()
+    }
+    pub fn set_loss(&mut self, idx: Idx, loss: ArrayD<f32>) {
+        if let None = self.losses.insert(idx.idx, loss) {
+            panic!("Tried to set loss at a removed index")
+        }
+    }
+    pub fn get_loss(&mut self, idx: Idx) -> ArrayViewD<f32> {
+        self.losses[&idx.idx].view()
+    }
+    pub fn replace_input_iterator(
+        &mut self,
+        idx: Idx,
+        new: Box<Iterator<Item = ArrayD<f32>>>,
+    ) -> Result<(), String> {
+        if let Some(Node::Input(old)) = self.nodes.get_mut(&idx.idx) {
+            *old = new;
+            Ok(())
+        } else {
+            Err("Tried to replace iterator in a node that was not input".to_string())
+        }
+    }
+    /// Registers a convolution operation node and returns the index
+    pub fn conv(&mut self, kernel: Idx, img: Idx, padding: Padding, stride: usize) -> Idx {
+        self.op(Conv::new(padding, stride), &[kernel, img])
+    }
+    /// Registers a pooling operation takes a `Batch * Height * Width * Channels` image and reduces
+    /// it to a `Batch * Channels` vector.
+    pub fn global_pool(&mut self, input: Idx, pool: GlobalPool) -> Idx {
+        self.op(pool, &[input])
+    }
+    /// Registers a Relu operation which takes the elementwise maximum of the input array and 0.
+    pub fn relu(&mut self, x: Idx) -> Idx {
+        self.op(Relu(0.0), &[x])
+    }
+    /// Registers a new sigmoid activation operation, an
+    /// elementwise application of $\frac{ 1 }{1 - e^{-x}}$.
+    pub fn sigmoid(&mut self, x: Idx) -> Idx {
+        self.op(Sigmoid(), &[x])
+    }
+    /// Registers a Tanh operation.
+    pub fn tanh(&mut self, x: Idx) -> Idx {
+        self.op(Tanh(), &[x])
+    }
+    /// Registers a matrix multiplication of `input` by `weights`.
+    pub fn matmul(&mut self, weights: Idx, input: Idx) -> Idx {
+        self.op(MatMul(), &[weights, input])
+    }
+    /// Registers an embedding later that converts A0 to vector representation
+    pub fn embedding(&mut self, weights: Idx, code: Idx) -> Idx {
+        self.op(Embedding(), &[weights, code])
     }
 }
 
