@@ -122,33 +122,63 @@ impl Graph {
         };
         self.register(o)
     }
-
+    /// Registers a constant, sets its value to `c`, then returns the idx
+    pub fn constant(&mut self, c: ArrayD<f32>) -> Idx {
+        let idx = self.register(Node::Constant);
+        self.set_value(idx, c);
+        idx
+    }
+    fn _forward1(&mut self, i: &usize) {
+        match self.nodes.get_mut(&i) {
+            Some(Node::Input(ref mut dataset)) => {
+                if let Some(v) = dataset.next() {
+                    self.values.insert(*i, v);
+                } else {
+                    unimplemented!("TODO handle input exhaustion gracefully")
+                }
+            }
+            Some(Node::Operation {
+                ref inputs,
+                ref operation,
+            }) => {
+                let v = operation.eval(view_at_idxs(&inputs, &self.values));
+                self.values.insert(*i, v);
+            }
+            _ => {}
+        }
+        // reset losses
+        self.losses.insert(*i, Array::zeros(self.values[i].shape()));
+    }
+    fn _backward1(&mut self, i: &usize) {
+        match self.nodes[i] {
+            Node::Constant => {}
+            Node::Input(_) => {}
+            Node::Parameter(_) => {
+                self.optimizer.apply_gradient(
+                    self.losses[&i].view(),
+                    self.values.get_mut(i).unwrap().view_mut(),
+                );
+            }
+            Node::Operation {
+                ref inputs,
+                ref operation,
+            } => {
+                let gradients =
+                    operation.grad(view_at_idxs(&inputs, &self.values), self.losses[&i].view());
+                for (grad, j) in gradients.iter().zip(inputs.iter()) {
+                    self.losses.get_mut(&j.idx).map(|x| *x += grad);
+                }
+            }
+        }
+    }
     /// Computes values for each node in insertion order.
     /// Parameters are unaffected.
     /// Inputs will set their value to the next output of their iterator,
     /// Operations will compute a new value based on the values of its inputs.
     pub fn forward(&mut self) {
-        for (i, node) in self.nodes.iter_mut() {
-            match node {
-                Node::Constant => {}
-                Node::Input(ref mut dataset) => {
-                    if let Some(v) = dataset.next() {
-                        self.values.insert(*i, v);
-                    } else {
-                        unimplemented!("TODO handle input exhaustion gracefully")
-                    }
-                }
-                Node::Operation {
-                    ref inputs,
-                    ref operation,
-                } => {
-                    let v = operation.eval(view_at_idxs(&inputs, &self.values));
-                    self.values.insert(*i, v);
-                }
-                Node::Parameter(_) => {}
-            }
-            // reset losses
-            self.losses.insert(*i, Array::zeros(self.values[i].shape()));
+        let keys: Vec<usize> = self.nodes.keys().map(|x| *x).collect();
+        for i in keys.iter() {
+            self._forward1(i);
         }
     }
     /// Propagates gradients in reverse insertion order.
@@ -156,28 +186,18 @@ impl Graph {
     /// Inputs are unaffected
     /// Operations will compute gradient given values from their inputs and gradients from its outputs
     pub fn backward(&mut self) {
-        for (i, node) in self.nodes.iter_mut().rev() {
-            match node {
-                Node::Constant => {}
-                Node::Input(_) => {}
-                Node::Parameter(_) => {
-                    self.optimizer.apply_gradient(
-                        self.losses[&i].view(),
-                        self.values.get_mut(i).unwrap().view_mut(),
-                    );
-                }
-                Node::Operation {
-                    ref inputs,
-                    ref operation,
-                } => {
-                    let gradients =
-                        operation.grad(view_at_idxs(&inputs, &self.values), self.losses[&i].view());
-                    for (grad, j) in gradients.iter().zip(inputs.iter()) {
-                        self.losses.get_mut(&j.idx).map(|x| *x += grad);
-                    }
-                }
-            }
+        let keys: Vec<usize> = self.nodes.keys().rev().map(|x| *x).collect();
+        for i in keys.iter() {
+            self._backward1(i);
         }
+    }
+    /// Updates value and resets losses for node with Idx `i`.
+    pub fn forward1(&mut self, i: Idx) {
+        self._forward1(&i.idx);
+    }
+    /// Back propagates losses for node with Idx `i`.
+    pub fn backward1(&mut self, i: Idx) {
+        self._backward1(&i.idx);
     }
     /// Remove the node at `idx` as well as its associated value and loss.
     pub fn remove(&mut self, idx: Idx) {
@@ -208,7 +228,7 @@ impl Graph {
             panic!("Tried to set value at a removed index")
         }
     }
-    pub fn get_value(&mut self, idx: Idx) -> ArrayViewD<f32> {
+    pub fn get_value(&self, idx: Idx) -> ArrayViewD<f32> {
         self.values[&idx.idx].view()
     }
     pub fn set_loss(&mut self, idx: Idx, loss: ArrayD<f32>) {
@@ -216,7 +236,7 @@ impl Graph {
             panic!("Tried to set loss at a removed index")
         }
     }
-    pub fn get_loss(&mut self, idx: Idx) -> ArrayViewD<f32> {
+    pub fn get_loss(&self, idx: Idx) -> ArrayViewD<f32> {
         self.losses[&idx.idx].view()
     }
     pub fn replace_input_iterator(

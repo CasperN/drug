@@ -19,7 +19,7 @@
 // TODO Link to actual examples
 
 #![feature(test)]
-#[macro_use(s)] // s! is used in tests
+#[cfg_attr(test, macro_use)]
 pub extern crate ndarray;
 extern crate rand;
 extern crate test;
@@ -57,14 +57,8 @@ pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
     ArrayD::from_shape_fn(shape, |_| normal.sample(&mut rng) as f32)
 }
 
-/// A loss function used for classification.
-///
-/// `logits` are a `batch_size * num_classes` array of values which will be compressed into the
-/// `[0,1]` range by a softmax operation. Given the correct categories `labels`, this function will
-/// calculate the negative log-probability of the logits and its gradient with respect to the logits.
-pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[usize]) -> (f32, ArrayD<f32>) {
+pub fn softmax(logits: ArrayViewD<f32>) -> Array2<f32> {
     let mut softmax = logits.to_owned().into_dimensionality::<Ix2>().unwrap();
-    let mut log_loss = 0.0;
     // Calculate softmax
     let max = softmax.fold_axis(Axis(1), 0.0, |x, y| if *x > *y { *x } else { *y });
     for ((b, _), x) in softmax.indexed_iter_mut() {
@@ -74,6 +68,17 @@ pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[usize]) -> 
     for ((b, _), x) in softmax.indexed_iter_mut() {
         *x /= sum[b];
     }
+    softmax
+}
+
+/// A loss function used for classification.
+///
+/// `logits` are a `batch_size * num_classes` array of values which will be compressed into the
+/// `[0,1]` range by a softmax operation. Given the correct categories `labels`, this function will
+/// calculate the negative log-probability of the logits and its gradient with respect to the logits.
+pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[usize]) -> (f32, ArrayD<f32>) {
+    let mut softmax = softmax(logits);
+    let mut log_loss = 0.0;
     // Turn softmax into gradient and add up log_loss
     for (b, lbl) in labels.iter().enumerate() {
         let correct = *lbl;
@@ -84,12 +89,36 @@ pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[usize]) -> 
 }
 
 #[cfg(test)]
-mod tests {
+mod libc {
+    use super::*;
     use graph::Graph;
+    use std::f32;
     #[test]
-    fn test_param_initialize() {
+    fn param_initialize() {
         let mut g = Graph::default();
         let x = g.param(&[3, 3, 1, 8]);
         assert_eq!(g.get_value(x).shape(), [3, 3, 1, 8]);
+    }
+    #[test]
+    fn softmax_vs_correct() {
+        let logits = arr2(&[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]);
+        let correct = arr2(&[
+            [
+                9.003057317038046e-2,
+                0.24472847105479767,
+                0.6652409557748219,
+            ],
+            [
+                9.003057317038045e-2,
+                0.24472847105479764,
+                0.6652409557748219,
+            ],
+        ]);
+        let softmax = softmax(logits.view().into_dyn());
+        for i in 0..2 {
+            for j in 0..3 {
+                assert!((softmax[(i, j)] - correct[(i, j)]).abs() < f32::EPSILON);
+            }
+        }
     }
 }

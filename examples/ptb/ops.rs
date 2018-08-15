@@ -2,7 +2,14 @@ use drug::*;
 use ndarray::prelude::*;
 
 #[derive(Debug)]
+/// Operation that does [x, y, a] -> a * x + (1 - a) * y. This is used in gated recurrent units
+/// forget gate.
 pub struct ConvexCombine();
+
+#[derive(Debug)]
+/// Operation that takes two batches of vectos xs, ys and appends ys below xs
+pub struct Append();
+
 #[allow(unused_mut)] // silly compiler
 impl nodes::Operation for ConvexCombine {
     fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
@@ -52,9 +59,6 @@ impl nodes::Operation for ConvexCombine {
     }
 }
 
-#[derive(Debug)]
-pub struct Append();
-#[allow(unused_variables)]
 impl nodes::Operation for Append {
     fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
         // TODO this is failing because we are appending onto hidden0 which does not have a

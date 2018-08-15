@@ -15,6 +15,10 @@ pub struct TextDataSet {
     pub corpus: Vec<Vec<ArrayD<f32>>>,
 }
 impl TextDataSet {
+    pub fn decode(&self, codes: Vec<usize>) -> String {
+        codes.into_iter().map(|c| self.idx2char[c]).collect()
+    }
+
     pub fn new(batch_size: usize) -> Self {
         let mut contents = String::new();
         let mut f = File::open(Path::new(DATA_DIR).join(TRAIN)).expect("train data not found");
@@ -56,7 +60,7 @@ impl TextDataSet {
                             if s < chunk[b].len() {
                                 chunk[b][s] as f32
                             } else {
-                                char2idx[&' '] as f32
+                                char2idx[&'.'] as f32
                             }
                         }).into_dyn()
                     })
