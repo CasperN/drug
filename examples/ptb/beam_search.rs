@@ -13,6 +13,7 @@ pub struct BeamSearch {
     beams: Vec<Beam>,
     width: usize,
 }
+// TODO support N layers of GRU
 impl BeamSearch {
     pub fn new(width: usize) -> Self {
         let mut beams = vec![];
@@ -57,7 +58,7 @@ impl BeamSearch {
         let mut new_words = vec![];
         let mut new_hidden = Array2::zeros([self.width, hidden_dim]);
         let mut i = 0;
-        'addin: for (b, code, log_prob) in top.into_iter() {
+        for (b, code, log_prob) in top.into_iter() {
             let mut sequence= self.beams[i].sequence.to_vec();
             sequence.push(code);
 
@@ -69,8 +70,8 @@ impl BeamSearch {
                 seen.insert(sequence.to_vec());
                 new_beams.push(Beam { sequence, log_prob });
                 i += 1;
-                if i >= self.width {
-                    break 'addin
+                if i == self.width {
+                    break;
                 }
             }
         }

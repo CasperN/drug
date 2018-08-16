@@ -8,9 +8,12 @@ pub use self::conv::Padding;
 pub use self::embedding::Embedding;
 pub use self::global_pool::GlobalPool;
 pub use self::matmul::MatMul;
+pub use self::arithmetic::{Add, Mult};
+
 use graph::Idx;
 use ndarray::prelude::*;
 use std::fmt::Debug;
+mod arithmetic;
 mod activation;
 mod conv;
 mod embedding;

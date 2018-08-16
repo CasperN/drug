@@ -99,7 +99,7 @@ fn main() {
     let gru = GatedRecurrentUnit::new(&mut g, batch_size, embedding_dim, hidden_dim);
 
     println!("Training...");
-    for (step, sequence) in train.corpus[..].iter().enumerate() {
+    for (step, sequence) in train.corpus[..300].iter().enumerate() {
         let mut hidden = gru.hidden0;
         let mut output = vec![];
         let mut total_loss = 0f32;
