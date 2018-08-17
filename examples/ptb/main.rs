@@ -7,7 +7,7 @@ extern crate rand;
 use drug::*;
 use ndarray::prelude::*;
 // use std::cmp::Ordering;
-
+#[allow(dead_code, unused_variables, unused_imports)]
 mod beam_search;
 mod ops;
 mod text_dataset;
@@ -60,8 +60,6 @@ impl GatedRecurrentUnit {
     }
     /// Add an instance of the gated recurrent unit
     fn add_cell(&self, g: &mut Graph, hidden_in: Idx, seq_in: Idx) -> Idx {
-        // TODO I think typically these are weighted and added not appended then weighted
-
         let appended = g.op(Append(), &[hidden_in, seq_in]);
 
         // Forget Gate
@@ -78,13 +76,51 @@ impl GatedRecurrentUnit {
     }
 }
 
+/// Stacked `GatedRecurrentUnit`s
+struct GruLayers {
+    layers: Vec<GatedRecurrentUnit>,
+}
+impl GruLayers {
+    /// dimensions is a vector at least length 2 specifying input dimension and all hidden dimensions
+    fn new(g: &mut Graph, batch_size: usize, dimensions: Vec<usize>) -> Self {
+        assert!(
+            dimensions.len() > 1,
+            "Need to specify at least 1 input and output layer"
+        );
+        let mut layers = vec![];
+        for i in 0..dimensions.len() - 1 {
+            layers.push(GatedRecurrentUnit::new(
+                g,
+                batch_size,
+                dimensions[i],
+                dimensions[i + 1],
+            ));
+        }
+        GruLayers { layers }
+    }
+    fn get_hidden0_idxs(&self) -> Vec<Idx> {
+        self.layers.iter().map(|l| l.hidden0).collect()
+    }
+    fn add_cells(&self, g: &mut Graph, hiddens: Vec<Idx>, seq_in: Idx) -> Vec<Idx> {
+        assert_eq!(self.layers.len(), hiddens.len());
+        let mut h = seq_in;
+        let mut new_hiddens = vec![];
+        for (l, hid) in self.layers.iter().zip(hiddens.iter()) {
+            h = l.add_cell(g, *hid, h);
+            new_hiddens.push(h)
+        }
+        new_hiddens
+    }
+}
+
 #[allow(unused_variables, unused_assignments)] // silly compiler
 fn main() {
-    let hidden_dim = 50;
-    let embedding_dim = 30;
-    let batch_size = 16;
-    let learning_rate = 0.005 / batch_size as f32;
-    let summary_every = 10;
+    // dimensions[0] is embedding dimension
+    let dimensions = vec![50, 150, 150, 150];
+    let batch_size = 8;
+    let learning_rate = 0.0001 / batch_size as f32;
+    let summary_every = 25;
+    let num_epochs = 5;
 
     println!("Reading dataset...",);
     let train = TextDataSet::new(batch_size);
@@ -94,69 +130,85 @@ fn main() {
 
     let mut g = Graph::default();
     // These structs hold Idx pointing to their parameters
-    let embedding = Embedding::new(&mut g, num_symbols, embedding_dim);
-    let predict = Predict::new(&mut g, hidden_dim, num_symbols);
-    let gru = GatedRecurrentUnit::new(&mut g, batch_size, embedding_dim, hidden_dim);
+    let embedding = Embedding::new(&mut g, num_symbols, dimensions[0]);
+    let predict = Predict::new(&mut g, *dimensions.last().unwrap(), num_symbols);
+    let gru = GruLayers::new(&mut g, batch_size, dimensions);
 
     println!("Training...");
-    for (step, sequence) in train.corpus[..300].iter().enumerate() {
-        let mut hidden = gru.hidden0;
-        let mut output = vec![];
-        let mut total_loss = 0f32;
+    for epoch in 0..num_epochs {
+        for (step, sequence) in train.corpus.iter().enumerate() {
+            let mut hiddens = gru.get_hidden0_idxs();
+            let mut output = vec![];
+            let mut total_loss = 0f32;
 
-        // Build GRU-RNN sequence dynamically based on the length of the sequence.
-        for word_batch in sequence.iter() {
-            let pred = predict.predict(&mut g, hidden);
-            let emb = embedding.add_word(&mut g, word_batch.view());
-            hidden = gru.add_cell(&mut g, hidden, emb);
+            // Build GRU-RNN sequence dynamically based on the length of the sequence.
+            for word_batch in sequence.iter() {
+                let pred = predict.predict(&mut g, *hiddens.last().unwrap());
+                let emb = embedding.add_word(&mut g, word_batch.view());
+                hiddens = gru.add_cells(&mut g, hiddens, emb);
 
-            output.push((pred, word_batch));
-        }
-        g.forward();
-        for (pred, correct) in output.into_iter() {
-            let correct: Vec<usize> = correct.iter().map(|x| *x as usize).collect();
+                output.push((pred, word_batch));
+            }
+            g.forward();
+            for (pred, correct) in output.into_iter() {
+                let correct: Vec<usize> = correct.iter().map(|x| *x as usize).collect();
 
-            let (loss, grad) = softmax_cross_entropy_loss(g.get_value(pred), correct.as_slice());
-            total_loss += loss;
-            g.set_loss(pred, -grad * learning_rate)
-        }
-        g.backward();
-        g.clear_non_parameters();
+                let (loss, grad) =
+                    softmax_cross_entropy_loss(g.get_value(pred), correct.as_slice());
+                total_loss += loss;
+                g.set_loss(pred, -grad * learning_rate)
+            }
+            g.backward();
+            g.clear_non_parameters();
 
-        if step % summary_every == 0 {
-            total_loss /= sequence.len() as f32 * batch_size as f32;
-            println!(
-                "Step: {:4} of {:?} \t Perplexity: {:2.2}",
-                step,
-                train.corpus.len(),
-                total_loss.exp()
-            );
+            if step % summary_every == 0 {
+                total_loss /= sequence.len() as f32 * batch_size as f32;
+                println!(
+                    "Epoch: {:?} of {:?}\t Step: {:4} of {:?}\t Perplexity: {:2.2}",
+                    epoch,
+                    num_epochs,
+                    step,
+                    train.corpus.len(),
+                    total_loss.exp()
+                );
+            }
         }
     }
     println!("Generating...");
     let beam_width = 25;
     let gen_len = 50;
     let mut beam_search = BeamSearch::new(beam_width);
-    let mean_h0 = g.get_value(gru.hidden0).mean_axis(Axis(0));
-    let hidden = Array::from_shape_fn([beam_width, hidden_dim], |(b, _h)|{
-        mean_h0[(b)]
-    }).into_dyn();
+
+    let mut hiddens = vec![];
+    for h in gru.get_hidden0_idxs().iter() {
+        let mean_h0 = g.get_value(*h).mean_axis(Axis(0));
+        let h_dim = mean_h0.shape()[0];
+        let hidden = Array::from_shape_fn([beam_width, h_dim], |(b, _h)| mean_h0[(b)]).into_dyn();
+        hiddens.push(hidden);
+    }
 
     for _ in 0..gen_len {
         // predict next characters based on hidden state
-        let old_hidden_i = g.constant(hidden.to_owned());
-        let pred_i = predict.predict(&mut g, old_hidden_i);
+        let mut old_hidden_idxs = vec![];
+        for h in hiddens.iter() {
+            old_hidden_idxs.push(g.constant(h.to_owned()));
+        }
+
+        let pred_i = predict.predict(&mut g, *old_hidden_idxs.last().unwrap());
         g.forward1(pred_i);
 
         // Consider next hidden state and words based on probability of sequence
-        let (hidden, words) = beam_search.search(hidden.view(), g.get_value(pred_i));
+        let (mut hiddens, words) = beam_search.search(&hiddens, g.get_value(pred_i));
         let emb_i = embedding.add_word(&mut g, words.view());
-        g.forward1(emb_i);
 
         // Propagate hidden state
-        let hidden_i = gru.add_cell(&mut g, old_hidden_i, emb_i);
+        let hidden_i = gru.add_cells(&mut g, old_hidden_idxs, emb_i);
         g.forward();
-        let hidden = g.get_value(hidden_i).to_owned();
+
+        for (i, idx) in gru.get_hidden0_idxs().iter().enumerate() {
+            hiddens[i] = g.get_value(*idx).to_owned();
+        }
+
         g.clear_non_parameters();
     }
 

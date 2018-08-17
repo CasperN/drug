@@ -9,10 +9,9 @@ pub struct Add();
 /// Elementwise multiplication operation
 pub struct Mult();
 
-
 #[allow(unused_variables)]
 impl Operation for Add {
-    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32>{
+    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
         let mut res = inputs[0].to_owned();
         for i in 1..inputs.len() {
             res = res + inputs[i].view();
@@ -24,10 +23,9 @@ impl Operation for Add {
     }
 }
 
-
 #[allow(unused_variables)]
 impl Operation for Mult {
-    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32>{
+    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
         let mut res = inputs[0].to_owned();
         for i in 1..inputs.len() {
             res = res * inputs[i].view();

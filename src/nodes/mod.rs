@@ -3,18 +3,18 @@
 //! * See [Node](enum.Node.html) for the types of node available.
 
 pub use self::activation::*;
+pub use self::arithmetic::{Add, Mult};
 pub use self::conv::Conv;
 pub use self::conv::Padding;
 pub use self::embedding::Embedding;
 pub use self::global_pool::GlobalPool;
 pub use self::matmul::MatMul;
-pub use self::arithmetic::{Add, Mult};
 
 use graph::Idx;
 use ndarray::prelude::*;
 use std::fmt::Debug;
-mod arithmetic;
 mod activation;
+mod arithmetic;
 mod conv;
 mod embedding;
 mod global_pool;
