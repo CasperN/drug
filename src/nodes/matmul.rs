@@ -11,39 +11,17 @@ impl Operation for MatMul {
         assert_eq!(inputs.len(), 2);
         let weights = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
         let neurons = inputs[1].view().into_dimensionality::<Ix2>().unwrap();
-        let n_b = neurons.shape()[0];
-        let n_i = weights.shape()[0];
-        let n_j = weights.shape()[1];
-        assert_eq!(n_i, neurons.shape()[1]);
 
-        let mut out: Array2<f32> = unsafe { Array::uninitialized([n_b, n_j]) };
-        let weights = weights.t();
-        for b in 0..n_b {
-            let v = neurons.slice(s!(b, ..));
-            out.slice_mut(s!(b, ..)).assign(&weights.dot(&v))
-        }
-        out.into_dyn()
+        neurons.dot(&weights).into_dyn()
     }
     fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         assert_eq!(inputs.len(), 2);
         let weights = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
         let neurons = inputs[1].view().into_dimensionality::<Ix2>().unwrap();
         let loss = loss.into_dimensionality::<Ix2>().unwrap();
-        let n_b = neurons.shape()[0];
-        let n_i = weights.shape()[0];
-        let n_j = weights.shape()[1];
-        assert_eq!(n_i, neurons.shape()[1]);
-        assert_eq!(n_b, loss.shape()[0]);
-        assert_eq!(n_j, loss.shape()[1]);
 
         let grad_weights = neurons.t().dot(&loss).into_dyn();
-
-        let mut grad_neurons = unsafe { Array::uninitialized([n_b, n_i] )};
-        for b in 0..n_b {
-            let v = loss.slice(s!(b, ..));
-            grad_neurons.slice_mut(s!(b, ..)).assign(&weights.dot(&v))
-        }
-        let grad_neurons = grad_neurons.into_dyn();
+        let grad_neurons = loss.dot(&weights.t()).into_dyn();
         vec![grad_weights, grad_neurons]
     }
 }
