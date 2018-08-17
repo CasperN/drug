@@ -121,12 +121,10 @@ impl Operation for Conv {
                                 if let Some((ci, cj)) =
                                     self.conv_point(*n_i, *n_j, *n_di, *n_dj, i, j, di, dj)
                                 {
-                                    for c1 in 0..*n_c1 {
-                                        for c0 in 0..*n_c0 {
-                                            output[(b, i, j, c1)] +=
-                                                kernel[(di, dj, c0, c1)] * image[(b, ci, cj, c0)];
-                                        }
-                                    }
+                                    let ker = kernel.slice(s!(di, dj, .., ..));
+                                    let img = image.slice(s!(b, ci, cj, ..));
+                                    let mut out = output.slice_mut(s!(b, i, j, ..));
+                                    out += &img.dot(&ker);
                                 }
                             }
                         }
@@ -170,6 +168,16 @@ impl Operation for Conv {
                                 if let Some((ci, cj)) =
                                     self.conv_point(*n_i, *n_j, *n_di, *n_dj, i, j, di, dj)
                                 {
+                                    // // OPTIMIZE Batch version is worse, I'm guessing due to cache
+                                    // // inefficency because the stride for `b` is so large
+                                    // let img = image.slice(s!(.., ci, cj, ..));
+                                    // let los = loss.slice(s!(.., i, j, ..));
+                                    // let ker = kernel.slice(s!(di, dj, .., ..));
+                                    // let mut gker = grad_kernel.slice_mut(s!(di, dj, .., ..));
+                                    // let mut gimg = grad_image.slice_mut(s!(.., ci, cj, ..));
+                                    // gker += &img.t().dot(&los);
+                                    // gimg += &los.dot(&ker.t());
+
                                     for c0 in 0..*n_c0 {
                                         let img = image[(b, ci, cj, c0)];
                                         let gi = &mut grad_image[(b, ci, cj, c0)];

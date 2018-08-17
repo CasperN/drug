@@ -19,7 +19,7 @@
 // TODO Link to actual examples
 
 #![feature(test)]
-#[cfg_attr(test, macro_use)]
+#[macro_use]
 pub extern crate ndarray;
 extern crate rand;
 extern crate test;

@@ -29,8 +29,8 @@ impl Operation for MatMul {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use xavier_initialize;
     use test::Bencher;
+    use xavier_initialize;
 
     #[test]
     fn sample_eval() {
@@ -49,9 +49,7 @@ mod tests {
         let weights = xavier_initialize(&[100, 150]);
         let vecs = xavier_initialize(&[8, 100]);
         let m = MatMul();
-        b.iter(|| {
-            m.eval(vec![weights.view(), vecs.view()].into_boxed_slice())
-        });
+        b.iter(|| m.eval(vec![weights.view(), vecs.view()].into_boxed_slice()));
     }
     #[bench]
     fn bench_matmul_grad(b: &mut Bencher) {
@@ -60,7 +58,10 @@ mod tests {
         let m = MatMul();
         let o = m.eval(vec![weights.view(), vecs.view()].into_boxed_slice());
         b.iter(|| {
-            m.grad(vec![weights.view(), vecs.view()].into_boxed_slice(), o.view())
+            m.grad(
+                vec![weights.view(), vecs.view()].into_boxed_slice(),
+                o.view(),
+            )
         });
     }
 }
