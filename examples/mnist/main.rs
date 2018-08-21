@@ -1,3 +1,5 @@
+//! Doc me por favor
+
 use std::f32;
 
 extern crate byteorder;
@@ -78,6 +80,8 @@ fn conv_network(g: &mut Graph, imgs: Idx) -> Idx {
     g.global_pool(conv_1x1, GlobalPool::Average)
 }
 
+
+/// this is main
 fn main() {
     let learning_rate = 0.25;
     let batch_size = 8;
@@ -93,6 +97,7 @@ fn main() {
 
     println!("Building graph...");
     let mut g = Graph::default();
+    g.optimizer.set_learning_rate(learning_rate);
 
     let train_images = reshape_and_iter(train_images, batch_size, use_dense);
     let imgs = g.register(Node::Input(train_images));
@@ -112,7 +117,7 @@ fn main() {
         let labels = &train_labels[step * batch_size..(step + 1) * batch_size];
         let (loss, grad) = softmax_cross_entropy_loss(g.get_value(out), labels);
 
-        g.set_loss(out, -grad * learning_rate);
+        g.set_loss(out, -grad);
         g.backward();
 
         if step % summary_every == 0 {

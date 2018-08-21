@@ -60,18 +60,20 @@ impl GatedRecurrentUnit {
     }
     /// Add an instance of the gated recurrent unit
     fn add_cell(&self, g: &mut Graph, hidden_in: Idx, seq_in: Idx) -> Idx {
-        let appended = g.op(Append(), &[hidden_in, seq_in]);
+        let app1 = g.op(Append(), &[hidden_in, seq_in]);
 
         // Forget Gate
-        let f_matmul = g.matmul(self.forgets, appended);
-        let f_sig = g.sigmoid(f_matmul);
+        let f_matmul = g.matmul(self.forgets, app1);
+        let forget = g.sigmoid(f_matmul);
 
         // Update Gate
-        let u_matmul = g.matmul(self.updates, appended);
-        let u_tanh = g.tanh(u_matmul);
+        let filtered = g.mult(&[forget, hidden_in]);
+        let app2 = g.op(Append(), &[filtered, seq_in]);
+        let u_matmul = g.matmul(self.updates, app2);
+        let update = g.tanh(u_matmul);
 
         // Combine them and get predictions
-        let hidden_out = g.op(ConvexCombine(), &[u_tanh, hidden_in, f_sig]);
+        let hidden_out = g.op(ConvexCombine(), &[update, hidden_in, forget]);
         hidden_out
     }
 }
@@ -116,11 +118,12 @@ impl GruLayers {
 #[allow(unused_variables, unused_assignments)] // silly compiler
 fn main() {
     // dimensions[0] is embedding dimension
-    let dimensions = vec![50, 150, 150, 150];
-    let batch_size = 8;
-    let learning_rate = 0.0001 / batch_size as f32;
+    let dimensions = vec![50, 60, 60];
+    let batch_size = 16;
+    // Note the effective learning_rate is this * batch_size * sequence_len
+    let learning_rate = 0.0001 as f32;
     let summary_every = 25;
-    let num_epochs = 5;
+    let num_epochs = 3;
 
     println!("Reading dataset...",);
     let train = TextDataSet::new(batch_size);
@@ -136,6 +139,8 @@ fn main() {
 
     println!("Training...");
     for epoch in 0..num_epochs {
+        g.optimizer.set_learning_rate(learning_rate * (0.5f32).powi(epoch));
+
         for (step, sequence) in train.corpus.iter().enumerate() {
             let mut hiddens = gru.get_hidden0_idxs();
             let mut output = vec![];
@@ -156,7 +161,7 @@ fn main() {
                 let (loss, grad) =
                     softmax_cross_entropy_loss(g.get_value(pred), correct.as_slice());
                 total_loss += loss;
-                g.set_loss(pred, -grad * learning_rate)
+                g.set_loss(pred, -grad)
             }
             g.backward();
             g.clear_non_parameters();

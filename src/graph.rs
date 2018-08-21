@@ -47,7 +47,7 @@ pub struct Graph {
     num_inserted: usize,
     #[debug_stub = "Initializer function"]
     initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>,
-    optimizer: Box<Optimizer>,
+    pub optimizer: Box<Optimizer>,
 }
 impl fmt::Display for Graph {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -71,7 +71,7 @@ impl fmt::Display for Graph {
 impl Default for Graph {
     /// xavier initializer and normal gradient descent
     fn default() -> Self {
-        Graph::new(Box::new(xavier_initialize), Box::new(SGD()))
+        Graph::new(Box::new(xavier_initialize), SGD::new_boxed())
     }
 }
 
@@ -250,6 +250,12 @@ impl Graph {
         } else {
             Err("Tried to replace iterator in a node that was not input".to_string())
         }
+    }
+    pub fn add(&mut self, inputs: &[Idx]) -> Idx {
+        self.op(Add(), inputs)
+    }
+    pub fn mult(&mut self, inputs: &[Idx]) -> Idx {
+        self.op(Mult(), inputs)
     }
     /// Registers a convolution operation node and returns the index
     pub fn conv(&mut self, kernel: Idx, img: Idx, padding: Padding, stride: usize) -> Idx {

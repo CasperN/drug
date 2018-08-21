@@ -1,4 +1,4 @@
-//! # ∂RuG --- Differentiable Rust Graph
+//! #  Δrug --- Differentiable Rust Graph
 //!
 //! This crate is a collection of utilities to build build neural networks (differentiable
 //! programs). See examples source code for implementations of canonical neural networks.
