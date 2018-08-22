@@ -19,7 +19,7 @@ impl TextDataSet {
         codes.into_iter().map(|c| self.idx2char[c]).collect()
     }
 
-    pub fn new(batch_size: usize) -> Self {
+    pub fn new(batch_size: usize, seq_len: usize) -> Self {
         let mut contents = String::new();
         let mut f = File::open(Path::new(DATA_DIR).join(TRAIN)).expect("train data not found");
         f.read_to_string(&mut contents)
@@ -46,30 +46,29 @@ impl TextDataSet {
             }
             coded_lines.push(line);
         }
-        // Sort lines by length so sequences in the same batch are roughly the same length
-        coded_lines.sort_by(|a, b| a.len().cmp(&b.len()));
+        // Sort lines by length so sequences in the same batch are the same length
 
-        // Batchify sequences and pad with spaces
-        let mut corpus: Vec<Vec<ArrayD<f32>>> = coded_lines
-            .exact_chunks(batch_size)
-            .map(|chunk| {
-                let sequence_len = chunk.last().unwrap().len();
-                (0..sequence_len)
-                    .map(|s| {
-                        Array::from_shape_fn([batch_size], |b| {
-                            if s < chunk[b].len() {
-                                chunk[b][s] as f32
-                            } else {
-                                char2idx[&'.'] as f32
-                            }
-                        }).into_dyn()
-                    })
-                    .collect()
+        let mut truncated: Vec<Vec<usize>> = coded_lines
+            .into_iter()
+            .flat_map(|l| {
+                let v: Vec<Vec<usize>> = l.exact_chunks(seq_len).map(|x| x.to_vec()).collect();
+                v.into_iter()
             })
             .collect();
 
-        // Shuffle so the rnn doesn't get all the short sequences first
-        thread_rng().shuffle(corpus.as_mut_slice());
+        thread_rng().shuffle(truncated.as_mut_slice());
+
+        let corpus: Vec<Vec<ArrayD<f32>>> = truncated
+            .exact_chunks(batch_size)
+            .map(|chunk| {
+                let mut batch = vec![];
+                for s in 0..seq_len {
+                    let x = Array::from_shape_fn([batch_size], |b| chunk[b][s] as f32).into_dyn();
+                    batch.push(x);
+                }
+                batch
+            })
+            .collect();
 
         TextDataSet {
             corpus,

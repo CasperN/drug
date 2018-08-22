@@ -80,7 +80,6 @@ fn conv_network(g: &mut Graph, imgs: Idx) -> Idx {
     g.global_pool(conv_1x1, GlobalPool::Average)
 }
 
-
 /// this is main
 fn main() {
     let learning_rate = 0.25;

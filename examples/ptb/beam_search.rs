@@ -1,5 +1,7 @@
 use drug::softmax;
 use ndarray::prelude::*;
+use rand::distributions::{Distribution, Uniform};
+use rand::{thread_rng, Rng};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -33,13 +35,19 @@ impl BeamSearch {
         &mut self,
         hidden: &Vec<ArrayD<f32>>,
         logits: ArrayViewD<f32>,
+        temperature: f32,
     ) -> (Vec<ArrayD<f32>>, ArrayD<f32>) {
         // Find likelihood of all "next elements" of every sequence
-        let log_probs = softmax(logits.into_dyn()).mapv_into(|x| x.ln());
         let mut top = vec![];
-        for ((b, code), lp) in log_probs.indexed_iter() {
-            let new_log_prob = self.beams[b].log_prob + *lp;
-            top.push((b, code, new_log_prob));
+        let probs = softmax(logits.into_dyn().mapv(|x| x / temperature).view());
+        for b in 0..self.width {
+            let codes = weighted_sample(probs.slice(s!(b, ..)), self.width);
+
+            for code in codes.iter() {
+                let lp = probs[(b, *code)].ln();
+                let new_log_prob = self.beams[b].log_prob + lp;
+                top.push((b, *code, new_log_prob));
+            }
         }
         // Sort descending
         top.sort_by(|a, b| {
@@ -89,9 +97,32 @@ impl BeamSearch {
             .collect();
         self.beams = new_beams;
         let new_words = Array::from_shape_vec([self.width], new_words)
-            .unwrap()
+            .expect("Oh No")
             .into_dyn();
 
         (new_hidden, new_words)
     }
+}
+
+/// Returns width samples from each column from weights.
+fn weighted_sample(weights: ArrayView1<f32>, width: usize) -> Vec<usize> {
+    let len = weights.shape()[0];
+    let unif = Uniform::new(0.0, 1.0);
+    let mut rng = thread_rng();
+    let mut res = HashSet::new();
+
+    while res.len() < width {
+        let mut x = unif.sample(&mut rng);
+        let mut code = 0;
+        for i in 0..len {
+            x -= weights[i];
+            if x > 0.0 {
+                code += 1;
+            } else {
+                break;
+            }
+        }
+        res.insert(code);
+    }
+    res.into_iter().collect()
 }

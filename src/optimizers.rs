@@ -16,7 +16,9 @@ pub struct SGD {
 }
 impl SGD {
     pub fn new_boxed() -> Box<Self> {
-        Box::new(SGD{ learning_rate: 0.01})
+        Box::new(SGD {
+            learning_rate: 0.01,
+        })
     }
 }
 

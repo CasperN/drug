@@ -118,16 +118,19 @@ impl GruLayers {
 #[allow(unused_variables, unused_assignments)] // silly compiler
 fn main() {
     // dimensions[0] is embedding dimension
-    let dimensions = vec![50, 60, 60];
+    let dimensions = vec![50, 100, 100, 100];
     let batch_size = 16;
+    let sequence_len = 20;
     // Note the effective learning_rate is this * batch_size * sequence_len
     let learning_rate = 0.0001 as f32;
-    let summary_every = 25;
-    let num_epochs = 3;
+    let summary_every = 100;
+    let num_epochs = 1;
 
     println!("Reading dataset...",);
-    let train = TextDataSet::new(batch_size);
+    let train = TextDataSet::new(batch_size, sequence_len);
     let num_symbols = train.idx2char.len();
+    println!("  Batch size {:?}", batch_size);
+    println!("  Sequence len {:?}", sequence_len);
     println!("  Number of symbols:   {:?}", num_symbols);
     println!("  Number of sequences: {:?}\n", train.corpus.len());
 
@@ -139,7 +142,8 @@ fn main() {
 
     println!("Training...");
     for epoch in 0..num_epochs {
-        g.optimizer.set_learning_rate(learning_rate * (0.5f32).powi(epoch));
+        g.optimizer
+            .set_learning_rate(learning_rate * (0.5f32).powi(epoch));
 
         for (step, sequence) in train.corpus.iter().enumerate() {
             let mut hiddens = gru.get_hidden0_idxs();
@@ -169,7 +173,7 @@ fn main() {
             if step % summary_every == 0 {
                 total_loss /= sequence.len() as f32 * batch_size as f32;
                 println!(
-                    "Epoch: {:?} of {:?}\t Step: {:4} of {:?}\t Perplexity: {:2.2}",
+                    "Epoch: {:?} of {:?}\t Step: {:5} of {:?}\t Perplexity: {:2.2}",
                     epoch,
                     num_epochs,
                     step,
@@ -182,6 +186,7 @@ fn main() {
     println!("Generating...");
     let beam_width = 25;
     let gen_len = 50;
+    let temperature = 25.0;
     let mut beam_search = BeamSearch::new(beam_width);
 
     let mut hiddens = vec![];
@@ -203,7 +208,7 @@ fn main() {
         g.forward1(pred_i);
 
         // Consider next hidden state and words based on probability of sequence
-        let (mut hiddens, words) = beam_search.search(&hiddens, g.get_value(pred_i));
+        let (mut hiddens, words) = beam_search.search(&hiddens, g.get_value(pred_i), temperature);
         let emb_i = embedding.add_word(&mut g, words.view());
 
         // Propagate hidden state
