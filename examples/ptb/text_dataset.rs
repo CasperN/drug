@@ -15,8 +15,8 @@ pub struct TextDataSet {
     pub corpus: Vec<Vec<ArrayD<f32>>>,
 }
 impl TextDataSet {
-    pub fn decode(&self, codes: Vec<usize>) -> String {
-        codes.into_iter().map(|c| self.idx2char[c]).collect()
+    pub fn decode(&self, codes: &Vec<usize>) -> String {
+        codes.iter().map(|c| self.idx2char[*c]).collect()
     }
 
     pub fn new(batch_size: usize, seq_len: usize) -> Self {
