@@ -1,11 +1,11 @@
 use ndarray::prelude::*;
 use nodes::Operation;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 /// Elementwise addition operation
 pub struct Add();
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 /// Elementwise multiplication operation
 pub struct Mult();
 

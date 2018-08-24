@@ -8,7 +8,7 @@ use xavier_initialize;
 
 /// A placeholder to help index into a graph. These should not be interchanged between graphs.
 /// That may work but its undefined behaviour.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Idx {
     idx: usize,
 }
@@ -39,16 +39,27 @@ pub struct Idx {
 /// * Multithreaded / distributed graphs
 ///     * Asyncronous training with periodic merging of weights
 /// * Graph analysis and inlining operations
-#[derive(DebugStub)]
+#[derive(DebugStub, Serialize, Deserialize)]
 pub struct Graph {
     nodes: BTreeMap<usize, Node>,
     values: BTreeMap<usize, ArrayD<f32>>,
     losses: BTreeMap<usize, ArrayD<f32>>,
     num_inserted: usize,
     #[debug_stub = "Initializer function"]
-    initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>,
+    #[serde(skip_serializing, skip_deserializing)]
+    initializer: Initializer,
+    #[serde(skip_serializing, skip_deserializing)]
     pub optimizer: Box<Optimizer>,
 }
+
+struct Initializer(Box<(Fn(&[usize]) -> ArrayD<f32>)>);
+
+impl Default for Initializer {
+    fn default() -> Self {
+        Initializer(Box::new(xavier_initialize))
+    }
+}
+
 impl fmt::Display for Graph {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Customize so only `x` and `y` are denoted.
@@ -84,7 +95,7 @@ impl Graph {
             values: BTreeMap::new(),
             losses: BTreeMap::new(),
             num_inserted: 0,
-            initializer,
+            initializer: Initializer(initializer),
             optimizer,
         }
     }
@@ -108,7 +119,7 @@ impl Graph {
                 x.into_boxed_slice()
             }),
         );
-        self.values.insert(idx, (self.initializer)(shape));
+        self.values.insert(idx, (self.initializer.0)(shape));
         self.losses.insert(idx, Array::zeros(shape));
         self.num_inserted += 1;
         Idx { idx }

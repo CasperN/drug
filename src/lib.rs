@@ -25,6 +25,11 @@ extern crate rand;
 extern crate test;
 #[macro_use]
 extern crate debug_stub_derive;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate erased_serde;
+extern crate serde;
 
 #[cfg(test)]
 #[macro_use(iproduct)]

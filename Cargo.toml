@@ -4,9 +4,13 @@ version = "0.1.0"
 authors = ["Casper Neo <casperneo@uchicago.edu>"]
 
 [dependencies]
-ndarray = "0.11.2"
+ndarray = { version="0.11.2", features=["serde-1"] }
 rand = "0.5.4"
 debug_stub_derive = "0.3.0"
+serde = "1.0"
+erased-serde = "0.3"
+serde_derive = "1.0"
+# serde_macros = "*"
 
 [dev-dependencies]
 byteorder = "1.2.4"

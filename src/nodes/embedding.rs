@@ -2,7 +2,7 @@ use ndarray::prelude::*;
 use nodes::Operation;
 
 /// Pulls out an embedding vector given the index and
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Embedding();
 
 impl Operation for Embedding {

@@ -10,6 +10,12 @@ pub trait Optimizer: Debug {
     // keep the meta data
 }
 
+impl Default for Box<Optimizer> {
+    fn default() -> Box<Optimizer> {
+        SGD::new_boxed()
+    }
+}
+
 #[derive(Debug)]
 pub struct SGD {
     learning_rate: f32,

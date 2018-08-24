@@ -6,7 +6,7 @@ use nodes::Operation;
 /// and eventually dialation (not yet implemented).
 /// * `input ~ (Batch * Height * Width * Channels_in)`.
 /// * `kernel ~ (Kernel_height * Kernel_width * Channels_in * Channels_out)`.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Conv {
     _dialation: usize,
     stride: (usize, usize),
@@ -19,7 +19,7 @@ pub struct Conv {
 /// the values beyond the images are equal to the edge. Other not implemented padding strategies
 /// are "Zero" padding or "Reflection" padding.
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Padding {
     Same,
     No,

@@ -10,6 +10,8 @@ pub use self::embedding::Embedding;
 pub use self::global_pool::GlobalPool;
 pub use self::matmul::MatMul;
 
+use erased_serde::{Serialize};
+use serde::Deserialize;
 use graph::Idx;
 use ndarray::prelude::*;
 use std::fmt::Debug;
@@ -22,7 +24,7 @@ mod matmul;
 
 /// Represents a differentiable function in a computation graph.
 /// Operations hold their own hyperparameters but not their parameters, values or losses.
-pub trait Operation: Debug {
+pub trait Operation: Debug + Serialize {
     /// Mutates Outputs based on inputs.
     /// Future warning: TODO do this in place by passing references and slices`
     fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32>;
@@ -33,13 +35,15 @@ pub trait Operation: Debug {
     fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
 }
 
-#[derive(DebugStub)]
+#[derive(DebugStub, Serialize, Deserialize)]
 /// Nodes are the building blocks of the [computation graph](../struct.Graph.html).
 /// The variants of a node differ in how the value is produced and how loss is propagated back
 pub enum Node {
     /// Produce Value from beyond the graph.
     /// * In a forward pass, its value is updates by the iterator.
     /// * In a backward pass, its losses are currently calculated but unused.
+
+    #[serde(skip_serializing, skip_deserializing)]
     Input(#[debug_stub = "Box<Iterator<Item=ArrayD<f32>>>"] Box<Iterator<Item = ArrayD<f32>>>),
 
     /// Parameter nodes only hold a shape. Its values are initialized when inserted into the graph
@@ -56,9 +60,18 @@ pub enum Node {
     /// to the losses indexed by `inputs`.
     Operation {
         inputs: Box<[Idx]>,
+        #[serde(skip_serializing, skip_deserializing)]
+        // #[serde(skip_deserializing)]
         operation: Box<Operation>,
     },
 
     /// Ignored by the graph, you have to set the values yourself
     Constant,
+}
+
+// TODO figure out serialization and deserialization of operations
+impl Default for Box<Operation> {
+    fn default() -> Self {
+        Box::new(arithmetic::Add())
+    }
 }

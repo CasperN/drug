@@ -3,7 +3,7 @@ use nodes::Operation;
 
 /// implements matrix multiply [Operation](trait.Operation.html).
 /// See [Node](enum.Node.html) constructor for full description.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MatMul();
 
 impl Operation for MatMul {

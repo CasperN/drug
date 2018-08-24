@@ -3,7 +3,7 @@ use nodes::Operation;
 
 /// implements Relu [Operation](trait.Operation.html).
 /// See [Graph](../struct.Graph.html) constructor for full description.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Relu(pub f32);
 
 impl Operation for Relu {
@@ -23,7 +23,7 @@ impl Operation for Relu {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 /// implements Sigmoid [Operation](trait.Operation.html)
 /// See [Graph](../struct.Graph.html) constructor for full description.
 pub struct Sigmoid();
@@ -48,7 +48,7 @@ impl Operation for Sigmoid {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 /// implements  Tanh [Operation](trait.Operation.html)
 /// See [Graph](../struct.Graph.html) constructor for full description.
 pub struct Tanh();
