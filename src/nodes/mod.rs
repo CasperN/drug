@@ -10,8 +10,8 @@ pub use self::embedding::Embedding;
 pub use self::global_pool::GlobalPool;
 pub use self::matmul::MatMul;
 
-use erased_serde::{Serialize};
-use serde::Deserialize;
+use erased_serde;
+// use serde::Deserialize;
 use graph::Idx;
 use ndarray::prelude::*;
 use std::fmt::Debug;
@@ -24,7 +24,7 @@ mod matmul;
 
 /// Represents a differentiable function in a computation graph.
 /// Operations hold their own hyperparameters but not their parameters, values or losses.
-pub trait Operation: Debug + Serialize {
+pub trait Operation: Debug + erased_serde::Serialize {
     /// Mutates Outputs based on inputs.
     /// Future warning: TODO do this in place by passing references and slices`
     fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32>;
@@ -34,6 +34,8 @@ pub trait Operation: Debug + Serialize {
     /// Future warning: TODO do this in place by passing references and slices`
     fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
 }
+serialize_trait_object!(Operation);
+
 
 #[derive(DebugStub, Serialize, Deserialize)]
 /// Nodes are the building blocks of the [computation graph](../struct.Graph.html).
@@ -60,8 +62,7 @@ pub enum Node {
     /// to the losses indexed by `inputs`.
     Operation {
         inputs: Box<[Idx]>,
-        #[serde(skip_serializing, skip_deserializing)]
-        // #[serde(skip_deserializing)]
+        #[serde(skip_deserializing)]
         operation: Box<Operation>,
     },
 

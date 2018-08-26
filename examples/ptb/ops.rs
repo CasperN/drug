@@ -1,12 +1,12 @@
 use drug::*;
 use ndarray::prelude::*;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 /// Operation that does [x, y, a] -> a * x + (1 - a) * y. This is used in gated recurrent units
 /// forget gate.
 pub struct ConvexCombine();
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 /// Operation that takes two batches of vectos xs, ys and appends ys below xs
 pub struct Append();
 
@@ -51,7 +51,7 @@ impl nodes::Operation for ConvexCombine {
                 let yi = y[(b, c)];
                 let li = loss[(b, c)];
                 a_grad[(b, c)] += li * (xi - yi);
-                x_grad[(b, c)] += ai * li;
+                x_grad[(b, c)] += li * ai;
                 y_grad[(b, c)] += li * (1.0 - ai);
             }
         }
@@ -61,8 +61,6 @@ impl nodes::Operation for ConvexCombine {
 
 impl nodes::Operation for Append {
     fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
-        // TODO this is failing because we are appending onto hidden0 which does not have a
-        // batch dimension
         let x = inputs[0]
             .view()
             .into_dimensionality::<Ix2>()

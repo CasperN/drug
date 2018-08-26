@@ -67,9 +67,8 @@ impl RecurrentCell for RNNCell {
 
 pub struct GatedRecurrentUnit {
     hidden0: Idx,
-    forgets: Idx,
+    feature: Idx,
     resets: Idx,
-    updates: Idx,
 }
 /// This is broken
 impl RecurrentCell for GatedRecurrentUnit {
@@ -79,8 +78,7 @@ impl RecurrentCell for GatedRecurrentUnit {
             // TODO hidden0 should be Ix2 but we add batch_size dim because im lazy
             // ideally there should be an op that stacks hidden0 batch_size times
             hidden0: g.param(&[batch_size, hidden_dim]),
-            forgets: g.param(&[hidden_dim + seq_in_dim, hidden_dim]),
-            updates: g.param(&[hidden_dim + seq_in_dim, hidden_dim]),
+            feature: g.param(&[hidden_dim + seq_in_dim, hidden_dim]),
             resets: g.param(&[hidden_dim + seq_in_dim, hidden_dim]),
         }
     }
@@ -88,22 +86,16 @@ impl RecurrentCell for GatedRecurrentUnit {
     fn add_cell(&self, g: &mut Graph, hidden_in: Idx, seq_in: Idx) -> Idx {
         let app1 = g.op(Append(), &[hidden_in, seq_in]);
 
-        // Forget Gate
-        let f_matmul = g.matmul(self.forgets, app1);
-        let forget = g.sigmoid(f_matmul);
+        // Extract features Gate
+        let f_matmul = g.matmul(self.feature, app1);
+        let feature = g.sigmoid(f_matmul);
 
         // Reset Gate
         let r_matmul = g.matmul(self.resets, app1);
         let reset = g.sigmoid(r_matmul);
 
-        // New hidden
-        let filtered = g.mult(&[forget, hidden_in]);
-        let app2 = g.op(Append(), &[filtered, seq_in]);
-        let u_matmul = g.matmul(self.updates, app2);
-        let update = g.tanh(u_matmul);
-
         // Combine them and get predictions
-        let hidden_out = g.op(ConvexCombine(), &[hidden_in, update, reset]);
+        let hidden_out = g.op(ConvexCombine(), &[hidden_in, feature, reset]);
         hidden_out
     }
     fn get_hidden0_idx(&self) -> Idx {

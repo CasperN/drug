@@ -3,6 +3,8 @@
 extern crate ndarray;
 extern crate drug;
 extern crate rand;
+#[macro_use]
+extern crate serde_derive;
 
 use drug::*;
 use ndarray::prelude::*;
@@ -44,16 +46,25 @@ impl Predict {
     }
 }
 
+/// Results after 5 epochs of training
+///
+/// Architecture            Final Train Perplexity
+/// --------------------    -----------------------
+/// GRU [30, 30, 30]        5.35
+/// GRU [30, 30, 30, 30]    5.09
+/// GRU [50, 50, 50]        4.69
+/// GRU [50, 100, 100]      4.16
+/// GRU [50, 250, 250]      3.86 - 3.74 (10 epochs)
 #[allow(unused_variables, unused_assignments)] // silly compiler
 fn main() {
     // dimensions[0] is embedding dimension, the rest are size of hidden dim in each layer
-    let dimensions = vec![30, 30, 30, 30];
+    let dimensions = vec![50, 50, 50];
     let batch_size = 16;
-    let sequence_len = 20;
+    let sequence_len = 50;
     // Note the effective learning_rate is this * batch_size * sequence_len
-    let learning_rate = 0.001 as f32;
+    let learning_rate = 0.01 as f32;
     let summary_every = 250;
-    let num_epochs = 5;
+    let num_epochs = 10;
 
     println!("Reading dataset...",);
     let train = TextDataSet::new(batch_size, sequence_len);
@@ -70,7 +81,7 @@ fn main() {
     // the graph.
     let embedding = Embedding::new(&mut g, num_symbols, dimensions[0]);
     let predict = Predict::new(&mut g, *dimensions.last().unwrap(), num_symbols);
-    let rnn = RecurrentLayers::<RNNCell>::new(&mut g, batch_size, dimensions);
+    let rnn = RecurrentLayers::<GatedRecurrentUnit>::new(&mut g, batch_size, dimensions);
 
     println!("Training...");
     let mut total_loss = 0.0;
@@ -120,46 +131,49 @@ fn main() {
     // BUG forward pass will fail if beam width > num characters
     let beam_width = 30;
     let gen_len = 80;
-    let temperature = 1.0;
+    // let temperature = 1.0;
 
-    let mut beam_search = BeamSearch::new(beam_width);
+    for temperature in [1.0, 0.9, 0.8, 0.7].into_iter() {
+        println!("\nGenerating with temp {:?}...", temperature);
 
-    let mut hiddens = vec![];
-    for h in rnn.get_hidden0_idxs().iter() {
-        let mean_h0 = g.get_value(*h).mean_axis(Axis(0));
-        let h_dim = mean_h0.shape()[0];
-        let hidden = Array::from_shape_fn([beam_width, h_dim], |(_b, h)| mean_h0[(h)]).into_dyn();
-        hiddens.push(hidden);
-    }
+        let mut beam_search = BeamSearch::new(beam_width);
+        let mut hiddens = vec![];
 
-    println!("\nGenerating with temp {:?}...", temperature);
-    for _ in 0..gen_len {
-        // predict next characters based on hidden state
-        let mut old_hidden_idxs = vec![];
-        for h in hiddens.iter() {
-            old_hidden_idxs.push(g.constant(h.to_owned()));
+        for h in rnn.get_hidden0_idxs().iter() {
+            let mean_h0 = g.get_value(*h).mean_axis(Axis(0));
+            let h_dim = mean_h0.shape()[0];
+            let hidden = Array::from_shape_fn([beam_width, h_dim], |(_b, h)| mean_h0[(h)]).into_dyn();
+            hiddens.push(hidden);
         }
 
-        let pred_i = predict.predict(&mut g, *old_hidden_idxs.last().unwrap());
-        g.forward1(pred_i);
+        for _ in 0..gen_len {
+            // predict next characters based on hidden state
+            let mut old_hidden_idxs = vec![];
+            for h in hiddens.iter() {
+                old_hidden_idxs.push(g.constant(h.to_owned()));
+            }
 
-        // Consider next hidden state and words based on probability of sequence
-        let (mut hiddens, words) = beam_search.search(&hiddens, g.get_value(pred_i), temperature);
-        let emb_i = embedding.add_word(&mut g, words.view());
+            let pred_i = predict.predict(&mut g, *old_hidden_idxs.last().unwrap());
+            g.forward1(pred_i);
 
-        // Propagate hidden state
-        let hidden_i = rnn.add_cells(&mut g, old_hidden_idxs, emb_i);
-        g.forward();
+            // Consider next hidden state and words based on probability of sequence
+            let (mut hiddens, words) = beam_search.search(&hiddens, g.get_value(pred_i), *temperature);
+            let emb_i = embedding.add_word(&mut g, words.view());
 
-        for (i, idx) in rnn.get_hidden0_idxs().iter().enumerate() {
-            hiddens[i] = g.get_value(*idx).to_owned();
+            // Propagate hidden state
+            let hidden_i = rnn.add_cells(&mut g, old_hidden_idxs, emb_i);
+            g.forward();
+
+            for (i, idx) in rnn.get_hidden0_idxs().iter().enumerate() {
+                hiddens[i] = g.get_value(*idx).to_owned();
+            }
+
+            g.clear_non_parameters();
         }
 
-        g.clear_non_parameters();
-    }
-
-    let res = beam_search.into_codes();
-    for s in res.iter() {
-        println!("{:?}", train.decode(s));
+        let res = beam_search.into_codes();
+        for s in res.iter() {
+            println!("{:?}", train.decode(s));
+        }
     }
 }
