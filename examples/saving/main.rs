@@ -1,13 +1,12 @@
 extern crate drug;
+extern crate erased_serde;
 extern crate ndarray;
 extern crate serde_json;
-extern crate erased_serde;
 
-use std::fs::File;
-use std::path::Path;
-use std::io::{Write, Read};
 use ndarray::prelude::*;
-
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
 
 fn save() {
     let mut g = drug::Graph::default();
@@ -19,7 +18,6 @@ fn save() {
     let s = serde_json::to_string(&g).expect("Error serealizing graph");
     let path = Path::new("/tmp/drug.json");
     let mut f = File::create(&path).expect("File creation error");
-
 
     println!("Writing graph:\n{}", g);
     f.write_all(s.as_bytes()).expect("Could not write");
@@ -36,11 +34,13 @@ fn load() {
     // assert_eq!(g.get_value(c), arr1(&[4.0, 6.0]).into_dyn());
 
     println!("Read graph:\n{}", g);
-
 }
 
-
-
+/// Saving is not fully implemented because I haven't figued out how to make serde work with boxed
+/// traits, like node with operations in them. Also the ony way to access nodes in the graph is
+/// through Idx structs which are only created when something is added to the graph. Those have to
+/// be saved seperately but I'm planning to be able to get Idxs from the graph using strings or
+/// name-spaces somehow.
 fn main() {
     save();
     load();

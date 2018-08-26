@@ -7,7 +7,6 @@ use optimizers::{Optimizer, SGD};
 use xavier_initialize;
 
 /// A placeholder to help index into a graph. These should not be interchanged between graphs.
-/// That may work but its undefined behaviour.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Idx {
     idx: usize,
@@ -19,26 +18,6 @@ pub struct Idx {
 /// `forward` method) and propagates losses backwards in reverse insertion order (see `backward`
 /// method). The default graph comes with an xavier initializer and a vanilla stochastic gradient
 /// descent optimizer.
-///
-/// ## Planned Features:
-/// * **Breaking change** Wrap Graph operations in results for better debugging
-/// * Naming and indexing via string
-/// * Saving / loading (need to distinguish parameters from other kinds of values)
-/// * Freezing part of the graph for training (particularly for GANs)
-/// * Building complexes of nodes such as (conv + bias + relu) or RNN cells while allowing for
-/// parameter reuse
-///
-/// ## Wishlist
-/// * Running in a GPU (once rust gets real GPGPU support)
-/// * Automatic differentiation for things like wasserstien loss
-///     * Automatically derive backwards versions of primatives
-/// * A nice DSL overloading arithmetic operators and allowing you to implicitly build a graph
-/// with Idxs
-///     * Probably requires "Graph Cursor" trait that hold `Rc<Refcell<Graph>>` with various
-///     implementations with methods that make sense to them.
-/// * Multithreaded / distributed graphs
-///     * Asyncronous training with periodic merging of weights
-/// * Graph analysis and inlining operations
 #[derive(DebugStub, Serialize, Deserialize)]
 pub struct Graph {
     nodes: BTreeMap<usize, Node>,

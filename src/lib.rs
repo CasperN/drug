@@ -1,22 +1,31 @@
-//! # ∂rug --- Differentiable Rust Graph
+//! # ∂rug - Differentiable Rust Graph
 //!
 //! This crate is a collection of utilities to build build neural networks (differentiable
 //! programs). See examples source code for implementations of canonical neural networks.
 //! This includes:
-//! * Mnist -- with dense networks
-//! * Mnist -- with convolutional neural networks (though embarassingly slowly)
-//! * Penn TreeBank character prediction with gated recurrent units
+//! * Mnist with dense networks
+//! * Mnist with convolutional neural networks (though embarassingly slowly)
+//! * Penn TreeBank character prediction with RNN and GRU
 //!
-//! This library should be considered unstable until the following examples are completed as they
-//! have particular requirements that may force breaking changes.
-//!
-//! | Example                         |    Challenge
-//! |---------------------------------|--------------------------------------------------------
-//! | Generative Adversarial Networks |   Multiple objectives and updating only parts of the graph
+//! ### Planned Changes
+//! * Saving / loading
+//!     * Naming and indexing via string
+//! * Building complexes of nodes (conv + bias + relu) / RNN cells, with parameter reuse
+//! * Subgraphs / updating subsets of graphs (e.g. for GAN)
+//! * Parallel backprop multiple arguments of 1 node
+//! * ndarray-parallel usage
 //!
 //! Reinforcement learning applications may also challenge the archiecture but I don't understand
 //! the process well enough yet to consider adding it to the library.
-// TODO Link to actual examples
+//!
+//! ### Wish list
+//! * GPU integration (awaiting advancements in rust gp-gpu)
+//! * Operator overloading API + Taking advantage of the type system and const generics
+//!     * May require total overhaul.. or may be possible with a "Graph Cursor" trait and more
+//!     sophisticaed handles beyond current Idxs
+//! * Automatic differentiation of operations defined only from loops (proc macros?)
+//! * Distributed training
+//! * Other kinds of derivatives e.g. jacobian
 
 #![feature(test)]
 #[macro_use]
@@ -43,7 +52,7 @@ use rand::thread_rng;
 mod graph;
 pub mod nodes;
 pub use nodes::{GlobalPool, Node, Padding};
-mod optimizers;
+pub mod optimizers;
 pub use graph::*;
 
 // TODO initializers file
@@ -62,6 +71,7 @@ pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
     ArrayD::from_shape_fn(shape, |_| normal.sample(&mut rng) as f32)
 }
 
+/// Take the softmax of an array of shape `batch_size * num_classes`
 pub fn softmax(logits: ArrayViewD<f32>) -> Array2<f32> {
     let mut softmax = logits.to_owned().into_dimensionality::<Ix2>().unwrap();
     // Calculate softmax

@@ -36,7 +36,6 @@ pub trait Operation: Debug + erased_serde::Serialize {
 }
 serialize_trait_object!(Operation);
 
-
 #[derive(DebugStub, Serialize, Deserialize)]
 /// Nodes are the building blocks of the [computation graph](../struct.Graph.html).
 /// The variants of a node differ in how the value is produced and how loss is propagated back
