@@ -1,7 +1,11 @@
+//! This module holds the various optimizers used to update parameters in a computation graph.
+//! Currently only one is implemented.
 use ndarray::{ArrayViewD, ArrayViewMutD};
 use std::fmt::Debug;
 use Idx;
 
+/// Optimizers define how gradients are applied to parameters. This should change so `apply_gradient`
+/// knows which parameter it is updating so features like "momentum" and "adam" can be implemented.
 pub trait Optimizer: Debug {
     fn register(&mut self, idx: Idx, shape: &[usize]);
     fn set_learning_rate(&mut self, learning_rate: f32);
@@ -16,6 +20,8 @@ impl Default for Box<Optimizer> {
     }
 }
 
+/// Vanilla Stochastic Gradient Descent optimizer. It multiplies the gradient by a learning rate
+/// and adds it to the parameter.
 #[derive(Debug)]
 pub struct SGD {
     learning_rate: f32,

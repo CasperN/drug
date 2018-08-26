@@ -142,7 +142,8 @@ fn main() {
         for h in rnn.get_hidden0_idxs().iter() {
             let mean_h0 = g.get_value(*h).mean_axis(Axis(0));
             let h_dim = mean_h0.shape()[0];
-            let hidden = Array::from_shape_fn([beam_width, h_dim], |(_b, h)| mean_h0[(h)]).into_dyn();
+            let hidden =
+                Array::from_shape_fn([beam_width, h_dim], |(_b, h)| mean_h0[(h)]).into_dyn();
             hiddens.push(hidden);
         }
 
@@ -157,7 +158,8 @@ fn main() {
             g.forward1(pred_i);
 
             // Consider next hidden state and words based on probability of sequence
-            let (mut hiddens, words) = beam_search.search(&hiddens, g.get_value(pred_i), *temperature);
+            let (mut hiddens, words) =
+                beam_search.search(&hiddens, g.get_value(pred_i), *temperature);
             let emb_i = embedding.add_word(&mut g, words.view());
 
             // Propagate hidden state

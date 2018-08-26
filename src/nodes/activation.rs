@@ -1,8 +1,7 @@
 use ndarray::{ArrayD, ArrayViewD};
 use nodes::Operation;
 
-/// implements Relu [Operation](trait.Operation.html).
-/// See [Graph](../struct.Graph.html) constructor for full description.
+/// Elementwise Relu [Operation](trait.Operation.html).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Relu(pub f32);
 
@@ -24,8 +23,7 @@ impl Operation for Relu {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-/// implements Sigmoid [Operation](trait.Operation.html)
-/// See [Graph](../struct.Graph.html) constructor for full description.
+/// Elementwise Sigmoid [Operation](trait.Operation.html)
 pub struct Sigmoid();
 
 fn sig(x: f32) -> f32 {
@@ -49,8 +47,7 @@ impl Operation for Sigmoid {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-/// implements  Tanh [Operation](trait.Operation.html)
-/// See [Graph](../struct.Graph.html) constructor for full description.
+/// Elementwise  Tanh [Operation](trait.Operation.html)
 pub struct Tanh();
 impl Operation for Tanh {
     fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
