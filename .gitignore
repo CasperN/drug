@@ -3,3 +3,4 @@
 Cargo.lock
 todo.md
 .DS_Store
+examples/data/*
