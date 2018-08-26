@@ -1,8 +1,8 @@
 //! # ∂rug - Differentiable Rust Graph
 //!
 //! This crate is a collection of utilities to build build neural networks (differentiable
-//! programs). See examples source code for implementations of canonical neural networks.
-//! This includes:
+//! programs). See [examples source code](https://github.com/CasperN/drug/tree/master/examples)
+//! for implementations of canonical neural networks. Examples include:
 //! * Mnist with dense networks
 //! * Mnist with convolutional neural networks (though embarassingly slowly)
 //! * Penn TreeBank character prediction with RNN and GRU
