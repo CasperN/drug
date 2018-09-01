@@ -30,8 +30,7 @@ impl Embedding {
     }
     // Add batch to graph and return Idx of its embedding
     fn add_word(&self, g: &mut Graph, word_batch: ArrayViewD<f32>) -> Idx {
-        let word = g.register(Node::Constant);
-        g.set_value(word, word_batch.to_owned());
+        let word = g.constant(word_batch.to_owned());
         g.embedding(self.0, word)
     }
 }

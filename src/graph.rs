@@ -103,6 +103,10 @@ impl Graph {
         self.num_inserted += 1;
         Idx { idx }
     }
+    /// Registers an input node which advances the iterator `it` each forward pass
+    pub fn input(&mut self, it: Box<Iterator<Item = ArrayD<f32>>>) -> Idx {
+        self.register(Node::Input(it))
+    }
     /// Registers an operation and its inputs
     pub fn op(&mut self, op: impl Operation + 'static, inputs: &[Idx]) -> Idx {
         // TODO Verify inputs
@@ -119,43 +123,29 @@ impl Graph {
         idx
     }
     fn _forward1(&mut self, i: &usize) {
-        match self.nodes.get_mut(&i) {
-            Some(Node::Input(ref mut dataset)) => {
-                if let Some(v) = dataset.next() {
-                    self.values.insert(*i, v);
-                } else {
-                    unimplemented!("TODO handle input exhaustion gracefully")
-                }
-            }
-            Some(Node::Operation {
-                ref inputs,
-                ref operation,
-            }) => {
-                let v = operation.eval(view_at_idxs(&inputs, &self.values));
+        if let Some(n) = self.nodes.get_mut(&i) {
+            let inps = n.inputs();
+            if let Some(v) = n.forward(view_at_idxs(&inps, &self.values)) {
                 self.values.insert(*i, v);
             }
-            _ => {}
         }
         // reset losses
         self.losses.insert(*i, Array::zeros(self.values[i].shape()));
     }
     fn _backward1(&mut self, i: &usize) {
-        match self.nodes[i] {
-            Node::Constant => {}
-            Node::Input(_) => {}
-            Node::Parameter(_) => {
+        if let Some(n) = self.nodes.get_mut(&i) {
+            if let Node::Parameter(..) = n {
                 self.optimizer.apply_gradient(
                     self.losses[&i].view(),
                     self.values.get_mut(i).unwrap().view_mut(),
                 );
-            }
-            Node::Operation {
-                ref inputs,
-                ref operation,
-            } => {
-                let gradients =
-                    operation.grad(view_at_idxs(&inputs, &self.values), self.losses[&i].view());
-                for (grad, j) in gradients.iter().zip(inputs.iter()) {
+            } else {
+                let inps = n.inputs();
+                let gradients = n.backward(
+                    view_at_idxs(&inps, &self.values),
+                    self.losses.get_mut(&i).unwrap().view_mut(),
+                );
+                for (grad, j) in gradients.iter().zip(inps.iter()) {
                     self.losses.get_mut(&j.idx).map(|x| *x += grad);
                 }
             }
@@ -242,45 +232,62 @@ impl Graph {
         }
     }
     pub fn add(&mut self, inputs: &[Idx]) -> Idx {
-        self.op(Add(), inputs)
+        self.register(Node::Add {
+            xs: inputs.to_vec(),
+        })
     }
     pub fn mult(&mut self, inputs: &[Idx]) -> Idx {
-        self.op(Mult(), inputs)
+        self.register(Node::Mult {
+            xs: inputs.to_vec(),
+        })
     }
     /// Registers a convolution operation node and returns the index
     pub fn conv(&mut self, kernel: Idx, img: Idx, padding: Padding, stride: usize) -> Idx {
-        self.op(Conv::new(padding, stride), &[kernel, img])
+        self.register(Node::Conv {
+            kernel,
+            img,
+            conv: Conv::new(padding, stride),
+        })
     }
     /// Registers a pooling operation takes a `Batch * Height * Width * Channels` image and reduces
     /// it to a `Batch * Channels` vector.
-    pub fn global_pool(&mut self, input: Idx, pool: GlobalPool) -> Idx {
-        self.op(pool, &[input])
+    pub fn global_pool(&mut self, x: Idx, pool: GlobalPool) -> Idx {
+        self.register(Node::GlobalPool { x, pool })
     }
     /// Registers a Relu operation which takes the elementwise maximum of the input array and 0.
     pub fn relu(&mut self, x: Idx) -> Idx {
-        self.op(Relu(0.0), &[x])
+        self.register(Node::Activation {
+            x,
+            a: Activation::Relu { leak: 0.0 },
+        })
     }
     /// Registers a new sigmoid activation operation, an
     /// elementwise application of $\frac{ 1 }{1 - e^{-x}}$.
     pub fn sigmoid(&mut self, x: Idx) -> Idx {
-        self.op(Sigmoid(), &[x])
+        self.register(Node::Activation {
+            x,
+            a: Activation::Sigmoid,
+        })
     }
     /// Registers a Tanh operation.
     pub fn tanh(&mut self, x: Idx) -> Idx {
-        self.op(Tanh(), &[x])
+        self.register(Node::Activation {
+            x,
+            a: Activation::Tanh,
+        })
     }
-    /// Registers a matrix multiplication of `input` by `weights`.
-    pub fn matmul(&mut self, weights: Idx, input: Idx) -> Idx {
-        self.op(MatMul(), &[weights, input])
+    /// Registers a matrix multiplication of vectors `v` by matrix `mat`.
+    pub fn matmul(&mut self, mat: Idx, v: Idx) -> Idx {
+        self.register(Node::MatMul { mat, v })
     }
     /// Registers an embedding later that converts A0 to vector representation
-    pub fn embedding(&mut self, weights: Idx, code: Idx) -> Idx {
-        self.op(Embedding(), &[weights, code])
+    pub fn embedding(&mut self, emb: Idx, code: Idx) -> Idx {
+        self.register(Node::Embedding { emb, code })
     }
 }
 
 fn view_at_idxs<'a>(
-    indices: &Box<[Idx]>,
+    indices: &Vec<Idx>,
     nodes: &'a BTreeMap<usize, ArrayD<f32>>,
 ) -> Box<[ArrayViewD<'a, f32>]> {
     let mut vals = Vec::new();

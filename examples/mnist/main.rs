@@ -99,7 +99,7 @@ fn main() {
     g.optimizer.set_learning_rate(learning_rate);
 
     let train_images = reshape_and_iter(train_images, batch_size, use_dense);
-    let imgs = g.register(Node::Input(train_images));
+    let imgs = g.input(train_images);
 
     let out = if use_dense {
         dense_network(&mut g, imgs)
