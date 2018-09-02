@@ -13,7 +13,7 @@ pub struct Idx {
 }
 
 /// A differentiable computation graph. Use this struct to hold your differentiable program
-/// which is a directed acyclic graph of [`Nodes`](enum.Node.html), their associated values
+/// which is a directed acyclic graph of Nodes, their associated values
 /// and losses (gradients). The graph computes values moving forward in insertion order (see
 /// `forward` method) and propagates losses backwards in reverse insertion order (see `backward`
 /// method). The default graph comes with an xavier initializer and a vanilla stochastic gradient
@@ -25,10 +25,11 @@ pub struct Graph {
     losses: BTreeMap<usize, ArrayD<f32>>,
     num_inserted: usize,
     #[debug_stub = "Initializer function"]
-    #[serde(skip_serializing, skip_deserializing)]
+    #[serde(skip)]
     initializer: Initializer,
-    #[serde(skip_serializing, skip_deserializing)]
+    #[serde(skip)]
     pub optimizer: Box<Optimizer>,
+    pub named_idxs: BTreeMap<String, Idx>,
 }
 
 struct Initializer(Box<(Fn(&[usize]) -> ArrayD<f32>)>);
@@ -73,6 +74,7 @@ impl Graph {
             nodes: BTreeMap::new(),
             values: BTreeMap::new(),
             losses: BTreeMap::new(),
+            named_idxs: BTreeMap::new(),
             num_inserted: 0,
             initializer: Initializer(initializer),
             optimizer,
@@ -103,7 +105,8 @@ impl Graph {
         self.num_inserted += 1;
         Idx { idx }
     }
-    /// Registers an input node which advances the iterator `it` each forward pass
+    /// Registers an input node which advances the iterator `it` each forward pass.
+    /// WARNING this prevents saving with serde.
     pub fn input(&mut self, it: Box<Iterator<Item = ArrayD<f32>>>) -> Idx {
         self.register(Node::Input(it))
     }
@@ -143,7 +146,7 @@ impl Graph {
                 let inps = n.inputs();
                 let gradients = n.backward(
                     view_at_idxs(&inps, &self.values),
-                    self.losses.get_mut(&i).unwrap().view_mut(),
+                    self.losses.get(&i).unwrap().view(),
                 );
                 for (grad, j) in gradients.iter().zip(inps.iter()) {
                     self.losses.get_mut(&j.idx).map(|x| *x += grad);
@@ -219,16 +222,24 @@ impl Graph {
     pub fn get_loss(&self, idx: Idx) -> ArrayViewD<f32> {
         self.losses[&idx.idx].view()
     }
+    /// Replace an Input node's iterator or converts Constant nodes into Input with this iterator.
+    /// WARNING this prevents saving with serde (boxed iterator). Constants should be used instead.
     pub fn replace_input_iterator(
         &mut self,
         idx: Idx,
         new: Box<Iterator<Item = ArrayD<f32>>>,
     ) -> Result<(), String> {
-        if let Some(Node::Input(old)) = self.nodes.get_mut(&idx.idx) {
-            *old = new;
+        if let Some(n) = self.nodes.get_mut(&idx.idx) {
+            match n {
+                Node::Input(old) => *old = new,
+                Node::Constant => *n = Node::Input(new),
+                _ => {
+                    return Err("Tried to replace input iter at non Input/Constant node.".to_string())
+                }
+            }
             Ok(())
         } else {
-            Err("Tried to replace iterator in a node that was not input".to_string())
+            Err("Tried to replace input iterator at invalid index.".to_string())
         }
     }
     pub fn add(&mut self, inputs: &[Idx]) -> Idx {

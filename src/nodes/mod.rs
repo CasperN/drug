@@ -1,6 +1,8 @@
-//! This module holds the different types nodes that exist in a computation graph.
-//! * See [Graph](../struct.Graph.html) for methods that create and register nodes.
-//! * See [Node](enum.Node.html) for the types of node available.
+//! This module holds the different types nodes that exist in a computation graph. Nodes that
+//! represent a differentiable computation are implemented by a struct with the "Operation" trait.
+//! Use [Graph](../struct.Graph.html) methods to create and register nodes inside a graph.
+//! See [Node](enum.Node.html) for the types of node available.
+//! This module may eventually be made private...
 
 pub use self::activation::*;
 pub use self::arithmetic::{Add, Mult};
@@ -24,6 +26,9 @@ mod matmul;
 
 /// Represents a differentiable function in a computation graph.
 /// Operations hold their own hyperparameters but not their parameters, values or losses.
+/// Unfortunately boxed traits cannot be saved with serde. When reloaded they will be replaced
+/// by Boxed<arithmetic::Add> nodes. When reloading a model with custom Operations, you need to
+/// replace them manually.
 pub trait Operation: Debug + erased_serde::Serialize {
     /// Mutates Outputs based on inputs.
     /// Future warning: TODO do this in place by passing references and slices`
@@ -71,8 +76,9 @@ pub enum Node {
     /// Produce Value from beyond the graph.
     /// * In a forward pass, its value is updates by the iterator.
     /// * In a backward pass, its losses are currently calculated but unused.
-
-    #[serde(skip_serializing, skip_deserializing)]
+    /// FIXME this prevents saving with serde (boxed iterator). Constants should be used instead.
+    /// Perhaps these can be automatically converted to constants at serialization time?
+    #[serde(skip)]
     Input(#[debug_stub = "Box<Iterator<Item=ArrayD<f32>>>"] Box<Iterator<Item = ArrayD<f32>>>),
 
     /// Parameter nodes only hold a shape. Its values are initialized when inserted into the graph
@@ -128,7 +134,7 @@ impl Node {
     pub fn backward(
         &self,
         inputs: Box<[ArrayViewD<f32>]>,
-        loss: ArrayViewMutD<f32>,
+        loss: ArrayViewD<f32>,
     ) -> Vec<ArrayD<f32>> {
         match self {
             Node::Conv { conv, .. } => conv.grad(inputs, loss.view()),

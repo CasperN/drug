@@ -52,7 +52,7 @@ use rand::thread_rng;
 
 mod graph;
 pub mod nodes;
-pub use nodes::{GlobalPool, Padding};
+pub use nodes::{GlobalPool, Padding, Operation};
 pub mod optimizers;
 pub use graph::*;
 
