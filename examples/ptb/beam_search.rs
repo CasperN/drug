@@ -1,7 +1,7 @@
 use drug::softmax;
 use ndarray::prelude::*;
 use rand::distributions::{Distribution, Uniform};
-use rand::{thread_rng, Rng};
+use rand::thread_rng;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
@@ -76,7 +76,7 @@ impl BeamSearch {
         ).into_dyn();
 
         let mut new_hidden = vec![];
-        for (i, hid) in hidden.iter().enumerate() {
+        for hid in hidden.iter() {
             let hdim = hid.shape()[1];
             let new_hid = Array::from_shape_fn([top.len(), hdim], |(b, d)| {
                 let orig = top[b].1;
@@ -85,7 +85,7 @@ impl BeamSearch {
 
             new_hidden.push(new_hid);
         }
-        self.beams = top.into_iter().map(|(beam, b)| beam).collect();
+        self.beams = top.into_iter().map(|(beam, _b)| beam).collect();
 
         (new_hidden, new_words)
     }

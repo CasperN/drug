@@ -4,6 +4,7 @@ use std::f32;
 use std::fs::{create_dir_all, File};
 use std::io;
 use std::io::{Read, Write};
+use std::path::Path;
 
 extern crate byteorder;
 extern crate drug;
@@ -13,7 +14,6 @@ extern crate serde_json;
 
 use drug::*;
 use ndarray::prelude::*;
-use std::path::Path;
 mod input;
 use input::{images, labels};
 
@@ -103,12 +103,10 @@ fn main() {
 
     let mut train_images = reshape_and_iter(train_images, batch_size, use_dense);
 
-    create_dir_all(MODEL_DIR).expect("Error creating model directory.");
-
     let (mut g, imgs, out) = load_model().unwrap_or_else(|_| {
         println!("Building graph...");
         let mut g = Graph::default();
-        // FIXME Input Nodes prevent saving 
+        // FIXME Input Nodes prevent saving
         // let imgs = g.input(train_images);
         let imgs = g.constant(arr0(0.0).into_dyn());
 
@@ -167,6 +165,7 @@ fn main() {
 }
 
 fn save_model(g: &Graph) -> Result<(), io::Error> {
+    create_dir_all(MODEL_DIR)?;
     let model_path = Path::new(MODEL_DIR).join("model.json");
     let mut f = File::create(&model_path)?;
     let gs = serde_json::to_string(&g)?;

@@ -5,24 +5,30 @@ extern crate drug;
 extern crate rand;
 #[macro_use]
 extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
 
 use drug::*;
 use ndarray::prelude::*;
-// use std::cmp::Ordering;
-#[allow(dead_code, unused_variables, unused_imports)]
+use std::fs::{create_dir_all, File};
+use std::io;
+use std::io::{Read, Write};
+use std::path::Path;
 mod beam_search;
 mod ops;
 mod rnn;
 mod text_dataset;
 
 use beam_search::BeamSearch;
-#[allow(unused_imports)]
-use rnn::{GatedRecurrentUnit, RNNCell, RecurrentLayers};
+use rnn::*;
 use text_dataset::TextDataSet;
+
+static MODEL_DIR: &'static str = "/tmp/drug/ptb/";
 
 /// Adds batches of words to the graph by registering constants and passing the coded words through
 /// an embedding vector. Despite being categorical, word_batch is a vector of positive integers
 /// because the graph only holds ArrayD<f32>
+#[derive(Serialize, Deserialize)]
 struct Embedding(Idx);
 impl Embedding {
     fn new(g: &mut Graph, embedding_len: usize, embedding_dim: usize) -> Self {
@@ -35,6 +41,7 @@ impl Embedding {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 struct Predict(Idx);
 impl Predict {
     fn new(g: &mut Graph, hidden_dim: usize, pred_len: usize) -> Self {
@@ -45,16 +52,56 @@ impl Predict {
     }
 }
 
-/// Results after 5 epochs of training
-///
-/// Architecture            Final Train Perplexity
-/// --------------------    -----------------------
+fn save_model<T: RecurrentCell>(g: &Graph, r: &RecurrentLayers<T>) -> Result<(), io::Error> {
+    create_dir_all(MODEL_DIR)?;
+    let model_path = Path::new(MODEL_DIR).join("model.json");
+    let mut f = File::create(&model_path)?;
+    let gs = serde_json::to_string(&g)?;
+    f.write_all(gs.as_bytes())?;
+
+    let rl_path = Path::new(MODEL_DIR).join("rl.json");
+    let mut f = File::create(&rl_path)?;
+    let rs = serde_json::to_string(&r)?;
+    f.write_all(rs.as_bytes())?;
+
+    Ok(())
+}
+
+fn load_model<T: RecurrentCell>(
+) -> Result<(Graph, Embedding, Predict, RecurrentLayers<T>), io::Error>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let model_path = Path::new(MODEL_DIR).join("model.json");
+    let mut f = File::open(&model_path)?;
+    let mut s = String::new();
+    f.read_to_string(&mut s)?;
+    let g: Graph = serde_json::from_str(&s).expect("Deserialize Graph error");
+
+    let rl_path = Path::new(MODEL_DIR).join("rl.json");
+    let mut f = File::open(&rl_path)?;
+    s.clear();
+    f.read_to_string(&mut s)?;
+    let rl: RecurrentLayers<T> =
+        serde_json::from_str(&s).expect("Deserialize RecurrentLayers error");
+
+    let emb_idx = *g.named_idxs.get("embedding").unwrap();
+    let embedding = Embedding(emb_idx);
+
+    let prd_idx = *g.named_idxs.get("predict").unwrap();
+    let predict = Predict(prd_idx);
+
+    println!("Loaded saved model");
+    Ok((g, embedding, predict, rl))
+}
+
+/// Architecture            Epoch 5 Train Perplexity
+/// --------------------    ------------------------
 /// GRU [30, 30, 30]        5.35
 /// GRU [30, 30, 30, 30]    5.09
 /// GRU [50, 50, 50]        4.69
 /// GRU [50, 100, 100]      4.16
 /// GRU [50, 250, 250]      3.86 - 3.74 (10 epochs)
-#[allow(unused_variables, unused_assignments)] // silly compiler
 fn main() {
     // dimensions[0] is embedding dimension, the rest are size of hidden dim in each layer
     let dimensions = vec![50, 50, 50];
@@ -63,7 +110,7 @@ fn main() {
     // Note the effective learning_rate is this * batch_size * sequence_len
     let learning_rate = 0.01 as f32;
     let summary_every = 250;
-    let num_epochs = 10;
+    let num_epochs = 1;
 
     println!("Reading dataset...",);
     let train = TextDataSet::new(batch_size, sequence_len);
@@ -73,14 +120,21 @@ fn main() {
     println!("  Number of symbols:   {:?}", num_symbols);
     println!("  Number of sequences: {:?}\n", train.corpus.len());
 
-    let mut g = Graph::default();
-    g.optimizer.set_learning_rate(learning_rate);
+    let (mut g, embedding, predict, rnn) = load_model().unwrap_or_else(|_| {
+        println!("Defining new model");
+        let mut g = Graph::default();
+        g.optimizer.set_learning_rate(learning_rate);
 
-    // These structs hold Idx pointing to their parameters and have methods adding operations to
-    // the graph.
-    let embedding = Embedding::new(&mut g, num_symbols, dimensions[0]);
-    let predict = Predict::new(&mut g, *dimensions.last().unwrap(), num_symbols);
-    let rnn = RecurrentLayers::<GatedRecurrentUnit>::new(&mut g, batch_size, dimensions);
+        // These structs hold Idx pointing to their parameters and have methods adding operations to
+        // the graph.
+        let embedding = Embedding::new(&mut g, num_symbols, dimensions[0]);
+        let predict = Predict::new(&mut g, *dimensions.last().unwrap(), num_symbols);
+        let rnn = RecurrentLayers::<GatedRecurrentUnit>::new(&mut g, batch_size, dimensions);
+
+        g.named_idxs.insert("embedding".to_string(), embedding.0);
+        g.named_idxs.insert("predict".to_string(), predict.0);
+        (g, embedding, predict, rnn)
+    });
 
     println!("Training...");
     let mut total_loss = 0.0;
@@ -99,6 +153,7 @@ fn main() {
                 output.push((pred, word_batch));
             }
             g.forward();
+            // Check 1 step predictions and compute loss
             for (pred, correct) in output.into_iter() {
                 let correct: Vec<usize> = correct.iter().map(|x| *x as usize).collect();
 
@@ -127,13 +182,14 @@ fn main() {
         }
     }
 
+    save_model(&g, &rnn).expect("Saving Error");
+
     // BUG forward pass will fail if beam width > num characters
     let beam_width = 30;
     let gen_len = 80;
-    // let temperature = 1.0;
 
-    for temperature in [1.0, 0.9, 0.8, 0.7].into_iter() {
-        println!("\nGenerating with temp {:?}...", temperature);
+    for temp in [1.0, 0.9, 0.8, 0.7].into_iter() {
+        println!("\nGenerating with temp {:?}...", temp);
 
         let mut beam_search = BeamSearch::new(beam_width);
         let mut hiddens = vec![];
@@ -148,27 +204,27 @@ fn main() {
 
         for _ in 0..gen_len {
             // predict next characters based on hidden state
-            let mut old_hidden_idxs = vec![];
-            for h in hiddens.iter() {
-                old_hidden_idxs.push(g.constant(h.to_owned()));
-            }
-
-            let pred_i = predict.predict(&mut g, *old_hidden_idxs.last().unwrap());
-            g.forward1(pred_i);
+            let h = g.constant(hiddens.last().unwrap().to_owned());
+            let pred_idx = predict.predict(&mut g, h);
+            g.forward1(pred_idx);
+            let next_word_logits = g.get_value(pred_idx).to_owned();
 
             // Consider next hidden state and words based on probability of sequence
-            let (mut hiddens, words) =
-                beam_search.search(&hiddens, g.get_value(pred_i), *temperature);
-            let emb_i = embedding.add_word(&mut g, words.view());
-
-            // Propagate hidden state
-            let hidden_i = rnn.add_cells(&mut g, old_hidden_idxs, emb_i);
-            g.forward();
-
-            for (i, idx) in rnn.get_hidden0_idxs().iter().enumerate() {
-                hiddens[i] = g.get_value(*idx).to_owned();
+            let (hiddens, words) = beam_search.search(&hiddens, next_word_logits.view(), *temp);
+            let mut hidden_idxs = vec![];
+            for h in hiddens.into_iter() {
+                hidden_idxs.push(g.constant(h));
             }
+            // Update hidden state
+            let emb = embedding.add_word(&mut g, words.view());
+            let hidden_idxs = rnn.add_cells(&mut g, hidden_idxs, emb);
+            // g.forward();
 
+            // Take it out of the graph
+            let mut hiddens = vec![];
+            for hi in hidden_idxs.into_iter() {
+                hiddens.push(g.get_value(hi).to_owned());
+            }
             g.clear_non_parameters();
         }
 

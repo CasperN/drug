@@ -9,8 +9,6 @@
 //! * Penn TreeBank character prediction with RNN and GRU
 //!
 //! ### Planned Changes
-//! * Saving / loading
-//!     * Naming and indexing via string
 //! * Building complexes of nodes (conv + bias + relu) / RNN cells, with parameter reuse
 //! * Subgraphs / updating subsets of graphs (e.g. for GAN)
 //! * Parallel backprop multiple arguments of 1 node
@@ -52,7 +50,7 @@ use rand::thread_rng;
 
 mod graph;
 pub mod nodes;
-pub use nodes::{GlobalPool, Padding, Operation};
+pub use nodes::{GlobalPool, Operation, Padding};
 pub mod optimizers;
 pub use graph::*;
 
