@@ -10,7 +10,7 @@ extern crate byteorder;
 extern crate drug;
 #[macro_use(s)]
 extern crate ndarray;
-extern crate serde_json;
+extern crate ron;
 
 use drug::*;
 use ndarray::prelude::*;
@@ -103,8 +103,9 @@ fn main() {
 
     let mut train_images = reshape_and_iter(train_images, batch_size, use_dense);
 
-    let (mut g, imgs, out) = load_model().unwrap_or_else(|_| {
-        println!("Building graph...");
+    let (mut g, imgs, out) = load_model().unwrap_or_else(|e| {
+        println!("Couldn't load graph because `{:?}`", e);
+        println!("Building new graph...");
         let mut g = Graph::default();
         // FIXME Input Nodes prevent saving
         // let imgs = g.input(train_images);
@@ -116,12 +117,13 @@ fn main() {
             conv_network(&mut g, imgs)
         };
 
+        // Save input and output idxs for the model
         g.named_idxs.insert("imgs".to_string(), imgs);
         g.named_idxs.insert("out".to_string(), out);
         (g, imgs, out)
     });
 
-    g.optimizer.set_learning_rate(learning_rate);
+    g.optimizer.learning_rate = learning_rate;
 
     println!("{}", g);
 
@@ -164,24 +166,27 @@ fn main() {
     save_model(&g).expect("Error saving");
 }
 
-fn save_model(g: &Graph) -> Result<(), io::Error> {
+fn save_model(g: &Graph) -> Result<(), Box<std::error::Error>> {
     create_dir_all(MODEL_DIR)?;
-    let model_path = Path::new(MODEL_DIR).join("model.json");
+    let model_path = Path::new(MODEL_DIR).join("model.bin");
     let mut f = File::create(&model_path)?;
-    let gs = serde_json::to_string(&g)?;
+    let gs = ron::ser::to_string(&g)?;
     f.write_all(gs.as_bytes())?;
     Ok(())
 }
 
-fn load_model() -> Result<(Graph, Idx, Idx), io::Error> {
-    let model_path = Path::new(MODEL_DIR).join("model.json");
-    let mut f = File::open(&model_path)?;
-    let mut s = String::new();
-    f.read_to_string(&mut s)?;
-    let g: Graph = serde_json::from_str(&s).expect("Deserialize error");
-
-    let imgs = *g.named_idxs.get("imgs").unwrap();
-    let out = *g.named_idxs.get("out").unwrap();
+fn load_model() -> Result<(Graph, Idx, Idx), Box<std::error::Error>> {
+    let model_path = Path::new(MODEL_DIR).join("model.bin");
+    let f = File::open(&model_path)?;
+    let g: Graph = ron::de::from_reader(&f)?;
+    let imgs = *g
+        .named_idxs
+        .get("imgs")
+        .expect("Expected named index `imgs`.");
+    let out = *g
+        .named_idxs
+        .get("out")
+        .expect("Expected named index `out`.");
     println!("Loaded saved model");
     Ok((g, imgs, out))
 }
@@ -205,3 +210,4 @@ fn count_correct(logits: ArrayViewD<f32>, labels: &[usize]) -> u32 {
     }
     num_correct
 }
+//

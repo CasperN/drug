@@ -13,7 +13,6 @@ pub use self::global_pool::GlobalPool;
 pub use self::matmul::MatMul;
 
 use erased_serde;
-// use serde::Deserialize;
 use graph::Idx;
 use ndarray::prelude::*;
 use std::fmt::Debug;

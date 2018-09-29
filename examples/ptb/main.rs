@@ -5,14 +5,13 @@ extern crate drug;
 extern crate rand;
 #[macro_use]
 extern crate serde_derive;
+extern crate ron;
 extern crate serde;
-extern crate serde_json;
 
 use drug::*;
 use ndarray::prelude::*;
 use std::fs::{create_dir_all, File};
-use std::io;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
 mod beam_search;
 mod ops;
@@ -52,43 +51,47 @@ impl Predict {
     }
 }
 
-fn save_model<T: RecurrentCell>(g: &Graph, r: &RecurrentLayers<T>) -> Result<(), io::Error> {
+fn save_model<T: RecurrentCell>(
+    g: &Graph,
+    r: &RecurrentLayers<T>,
+) -> Result<(), Box<std::error::Error>> {
     create_dir_all(MODEL_DIR)?;
     let model_path = Path::new(MODEL_DIR).join("model.json");
     let mut f = File::create(&model_path)?;
-    let gs = serde_json::to_string(&g)?;
+    let gs = ron::ser::to_string(&g)?;
     f.write_all(gs.as_bytes())?;
 
     let rl_path = Path::new(MODEL_DIR).join("rl.json");
     let mut f = File::create(&rl_path)?;
-    let rs = serde_json::to_string(&r)?;
+    let rs = ron::ser::to_string(&r)?;
     f.write_all(rs.as_bytes())?;
 
     Ok(())
 }
 
 fn load_model<T: RecurrentCell>(
-) -> Result<(Graph, Embedding, Predict, RecurrentLayers<T>), io::Error>
+) -> Result<(Graph, Embedding, Predict, RecurrentLayers<T>), Box<std::error::Error>>
 where
     T: serde::de::DeserializeOwned,
 {
     let model_path = Path::new(MODEL_DIR).join("model.json");
-    let mut f = File::open(&model_path)?;
-    let mut s = String::new();
-    f.read_to_string(&mut s)?;
-    let g: Graph = serde_json::from_str(&s).expect("Deserialize Graph error");
+    let f = File::open(&model_path)?;
+    let g: Graph = ron::de::from_reader(f)?;
 
     let rl_path = Path::new(MODEL_DIR).join("rl.json");
-    let mut f = File::open(&rl_path)?;
-    s.clear();
-    f.read_to_string(&mut s)?;
-    let rl: RecurrentLayers<T> =
-        serde_json::from_str(&s).expect("Deserialize RecurrentLayers error");
+    let f = File::open(&rl_path)?;
+    let rl: RecurrentLayers<T> = ron::de::from_reader(&f)?;
 
-    let emb_idx = *g.named_idxs.get("embedding").unwrap();
+    let emb_idx = *g
+        .named_idxs
+        .get("embedding")
+        .expect("Expected named index `embedding`");
     let embedding = Embedding(emb_idx);
 
-    let prd_idx = *g.named_idxs.get("predict").unwrap();
+    let prd_idx = *g
+        .named_idxs
+        .get("predict")
+        .expect("Expected named index `predict`");
     let predict = Predict(prd_idx);
 
     println!("Loaded saved model");
@@ -123,7 +126,7 @@ fn main() {
     let (mut g, embedding, predict, rnn) = load_model().unwrap_or_else(|_| {
         println!("Defining new model");
         let mut g = Graph::default();
-        g.optimizer.set_learning_rate(learning_rate);
+        g.optimizer.learning_rate = learning_rate;
 
         // These structs hold Idx pointing to their parameters and have methods adding operations to
         // the graph.

@@ -3,11 +3,11 @@ use nodes::*;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use optimizers::{Optimizer, SGD};
+use optimizers::Optimizer;
 use xavier_initialize;
 
 /// A placeholder to help index into a graph. These should not be interchanged between graphs.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub struct Idx {
     idx: usize,
 }
@@ -27,8 +27,7 @@ pub struct Graph {
     #[debug_stub = "Initializer function"]
     #[serde(skip)]
     initializer: Initializer,
-    #[serde(skip)]
-    pub optimizer: Box<Optimizer>,
+    pub optimizer: Optimizer,
     pub named_idxs: BTreeMap<String, Idx>,
 }
 
@@ -43,7 +42,7 @@ impl Default for Initializer {
 impl fmt::Display for Graph {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Customize so only `x` and `y` are denoted.
-        writeln!(f, "Computation Graph with Optimizer: {:?}", self.optimizer)?;
+        writeln!(f, "Computation Graph with Optimizer:\n\t{}", self.optimizer)?;
         for (i, node) in self.nodes.iter() {
             writeln!(
                 f,
@@ -62,14 +61,14 @@ impl fmt::Display for Graph {
 impl Default for Graph {
     /// xavier initializer and normal gradient descent
     fn default() -> Self {
-        Graph::new(Box::new(xavier_initialize), SGD::new_boxed())
+        Graph::new(Box::new(xavier_initialize), Optimizer::default())
     }
 }
 
 impl Graph {
     /// Consider using `Graph::default()` if you don't want to choose your own optimizer and
     /// initializer.
-    pub fn new(initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>, optimizer: Box<Optimizer>) -> Self {
+    pub fn new(initializer: Box<(Fn(&[usize]) -> ArrayD<f32>)>, optimizer: Optimizer) -> Self {
         Graph {
             nodes: BTreeMap::new(),
             values: BTreeMap::new(),
@@ -83,6 +82,9 @@ impl Graph {
     /// Inserts the node into the graph and returns the index
     pub fn register(&mut self, node: Node) -> Idx {
         let idx = self.num_inserted;
+        if let Node::Parameter(ref shape) = node {
+            self.optimizer.register(Idx { idx }, shape)
+        }
         self.nodes.insert(idx, node);
         self.values.insert(idx, Array::zeros(()).into_dyn());
         self.losses.insert(idx, Array::zeros(()).into_dyn());
@@ -92,18 +94,14 @@ impl Graph {
     /// Registers a parameter of the given shape and initializes the value using the graph's
     /// initializer.
     pub fn param(&mut self, shape: &[usize]) -> Idx {
-        let idx = self.num_inserted;
-        self.nodes.insert(
-            idx,
-            Node::Parameter({
-                let x: Vec<usize> = shape.iter().map(|x| *x).collect();
-                x.into_boxed_slice()
-            }),
-        );
-        self.values.insert(idx, (self.initializer.0)(shape));
-        self.losses.insert(idx, Array::zeros(shape));
+        let idx = self.register(Node::Parameter({
+            let x: Vec<usize> = shape.iter().map(|x| *x).collect(); // HACK
+            x.into_boxed_slice()
+        }));
+        self.values.insert(idx.idx, (self.initializer.0)(shape));
+        self.losses.insert(idx.idx, Array::zeros(shape));
         self.num_inserted += 1;
-        Idx { idx }
+        idx
     }
     /// Registers an input node which advances the iterator `it` each forward pass.
     /// WARNING this prevents saving with serde.
@@ -139,8 +137,9 @@ impl Graph {
         if let Some(n) = self.nodes.get_mut(&i) {
             if let Node::Parameter(..) = n {
                 self.optimizer.apply_gradient(
-                    self.losses[&i].view(),
+                    &Idx { idx: *i },
                     self.values.get_mut(i).unwrap().view_mut(),
+                    self.losses[&i].view(),
                 );
             } else {
                 let inps = n.inputs();
