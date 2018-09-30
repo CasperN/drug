@@ -4,7 +4,7 @@ use serde::Serialize;
 
 pub trait RecurrentCell: Serialize {
     /// Constructor.
-    fn new(g: &mut Graph, batch_size: usize, seq_in_dim: usize, hidden_dim: usize) -> Self;
+    fn new(g: &mut Graph, seq_in_dim: usize, hidden_dim: usize) -> Self;
     /// Adds an instance of itself, every instance shares the same parameters
     fn add_cell(&self, g: &mut Graph, hidden_in: Idx, seq_in: Idx) -> Idx;
     /// The index of hidden 0
@@ -17,14 +17,14 @@ pub struct RecurrentLayers<T: RecurrentCell> {
     layers: Vec<T>,
 }
 impl<T: RecurrentCell> RecurrentLayers<T> {
-    pub fn new(g: &mut Graph, batch_size: usize, dimensions: Vec<usize>) -> RecurrentLayers<T> {
+    pub fn new(g: &mut Graph, dimensions: Vec<usize>) -> RecurrentLayers<T> {
         assert!(
             dimensions.len() > 1,
             "Need to specify at least 1 input and output layer"
         );
         let mut layers = vec![];
         for i in 0..dimensions.len() - 1 {
-            layers.push(T::new(g, batch_size, dimensions[i], dimensions[i + 1]));
+            layers.push(T::new(g, dimensions[i], dimensions[i + 1]));
         }
         RecurrentLayers { layers }
     }
@@ -51,11 +51,11 @@ pub struct RNNCell {
 }
 
 impl RecurrentCell for RNNCell {
-    fn new(g: &mut Graph, batch_size: usize, seq_in_dim: usize, hidden_dim: usize) -> Self {
+    fn new(g: &mut Graph, seq_in_dim: usize, hidden_dim: usize) -> Self {
         RNNCell {
             // TODO hidden0 should be Ix2 but we add batch_size dim because im lazy
             // ideally there should be an op that stacks hidden0 batch_size times
-            hidden0: g.param(&[batch_size, hidden_dim]),
+            hidden0: g.param(&[1, hidden_dim]),
             weights: g.param(&[hidden_dim + seq_in_dim, hidden_dim]),
         }
     }
@@ -82,11 +82,11 @@ pub struct GatedRecurrentUnit {
 
 impl RecurrentCell for GatedRecurrentUnit {
     /// Register the params for one gated recurrent unit
-    fn new(g: &mut Graph, batch_size: usize, seq_in_dim: usize, hidden_dim: usize) -> Self {
+    fn new(g: &mut Graph, seq_in_dim: usize, hidden_dim: usize) -> Self {
         GatedRecurrentUnit {
             // TODO hidden0 should be Ix2 but we add batch_size dim because im lazy
             // ideally there should be an op that stacks hidden0 batch_size times
-            hidden0: g.param(&[batch_size, hidden_dim]),
+            hidden0: g.param(&[1, hidden_dim]),
             feature: g.param(&[hidden_dim + seq_in_dim, hidden_dim]),
             resets: g.param(&[hidden_dim + seq_in_dim, hidden_dim]),
         }

@@ -2,8 +2,7 @@
 
 use std::f32;
 use std::fs::{create_dir_all, File};
-use std::io;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
 
 extern crate byteorder;
@@ -106,6 +105,7 @@ fn main() {
     let (mut g, imgs, out) = load_model().unwrap_or_else(|e| {
         println!("Couldn't load graph because `{:?}`", e);
         println!("Building new graph...");
+
         let mut g = Graph::default();
         // FIXME Input Nodes prevent saving
         // let imgs = g.input(train_images);

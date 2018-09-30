@@ -56,12 +56,12 @@ fn save_model<T: RecurrentCell>(
     r: &RecurrentLayers<T>,
 ) -> Result<(), Box<std::error::Error>> {
     create_dir_all(MODEL_DIR)?;
-    let model_path = Path::new(MODEL_DIR).join("model.json");
+    let model_path = Path::new(MODEL_DIR).join("computation_graph.bin");
     let mut f = File::create(&model_path)?;
     let gs = ron::ser::to_string(&g)?;
     f.write_all(gs.as_bytes())?;
 
-    let rl_path = Path::new(MODEL_DIR).join("rl.json");
+    let rl_path = Path::new(MODEL_DIR).join("recurrent_layers.bin");
     let mut f = File::create(&rl_path)?;
     let rs = ron::ser::to_string(&r)?;
     f.write_all(rs.as_bytes())?;
@@ -74,11 +74,11 @@ fn load_model<T: RecurrentCell>(
 where
     T: serde::de::DeserializeOwned,
 {
-    let model_path = Path::new(MODEL_DIR).join("model.json");
+    let model_path = Path::new(MODEL_DIR).join("computation_graph.bin");
     let f = File::open(&model_path)?;
     let g: Graph = ron::de::from_reader(f)?;
 
-    let rl_path = Path::new(MODEL_DIR).join("rl.json");
+    let rl_path = Path::new(MODEL_DIR).join("recurrent_layers.bin");
     let f = File::open(&rl_path)?;
     let rl: RecurrentLayers<T> = ron::de::from_reader(&f)?;
 
@@ -108,7 +108,7 @@ where
 fn main() {
     // dimensions[0] is embedding dimension, the rest are size of hidden dim in each layer
     let dimensions = vec![50, 50, 50];
-    let batch_size = 16;
+    let batch_size = 32;
     let sequence_len = 50;
     // Note the effective learning_rate is this * batch_size * sequence_len
     let learning_rate = 0.01 as f32;
@@ -132,7 +132,7 @@ fn main() {
         // the graph.
         let embedding = Embedding::new(&mut g, num_symbols, dimensions[0]);
         let predict = Predict::new(&mut g, *dimensions.last().unwrap(), num_symbols);
-        let rnn = RecurrentLayers::<GatedRecurrentUnit>::new(&mut g, batch_size, dimensions);
+        let rnn = RecurrentLayers::<GatedRecurrentUnit>::new(&mut g, dimensions);
 
         g.named_idxs.insert("embedding".to_string(), embedding.0);
         g.named_idxs.insert("predict".to_string(), predict.0);
@@ -148,8 +148,13 @@ fn main() {
             let mut output = vec![];
 
             // Build RNN sequence dynamically based on the length of the sequence.
-            for word_batch in sequence.iter() {
-                let pred = predict.predict(&mut g, *hiddens.last().unwrap());
+            for (i, word_batch) in sequence.iter().enumerate() {
+                // Skip predicting first word because batch size incompatible. (FIXME)
+                let pred = if i > 0 {
+                    Some(predict.predict(&mut g, *hiddens.last().unwrap()))
+                } else {
+                    None
+                };
                 let emb = embedding.add_word(&mut g, word_batch.view());
                 hiddens = rnn.add_cells(&mut g, hiddens, emb);
 
@@ -160,10 +165,12 @@ fn main() {
             for (pred, correct) in output.into_iter() {
                 let correct: Vec<usize> = correct.iter().map(|x| *x as usize).collect();
 
-                let (loss, grad) =
-                    softmax_cross_entropy_loss(g.get_value(pred), correct.as_slice());
-                total_loss += loss;
-                g.set_loss(pred, -grad)
+                if let Some(pred) = pred {
+                    let (loss, grad) =
+                        softmax_cross_entropy_loss(g.get_value(pred), correct.as_slice());
+                    total_loss += loss;
+                    g.set_loss(pred, -grad)
+                }
             }
             g.backward();
             g.clear_non_parameters();
