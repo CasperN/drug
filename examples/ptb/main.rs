@@ -1,4 +1,4 @@
-#![feature(exact_chunks)]
+#![feature(chunks_exact)]
 #[macro_use]
 extern crate ndarray;
 extern crate drug;

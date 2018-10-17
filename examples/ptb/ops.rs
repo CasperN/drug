@@ -12,7 +12,7 @@ pub struct ConvexCombine();
 pub struct Append();
 
 impl nodes::Operation for ConvexCombine {
-    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
+    fn eval(&self, inputs: &[ArrayViewD<f32>]) -> ArrayD<f32> {
         assert_eq!(inputs.len(), 3, "Convex combine takes 3 arguments x, y, a");
 
         let y = inputs[1].to_owned();
@@ -25,7 +25,7 @@ impl nodes::Operation for ConvexCombine {
         azip!(mut x, a, y in { *x = a * *x + (1.0 - a) * y});
         x.into_dyn()
     }
-    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+    fn grad(&self, inputs: &[ArrayViewD<f32>], loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         assert_eq!(inputs.len(), 3, "Convex combine takes 3 arguments x, y, a");
         let x = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
         let y = inputs[1].view().into_dimensionality::<Ix2>().unwrap();
@@ -62,7 +62,7 @@ impl nodes::Operation for ConvexCombine {
 }
 
 impl nodes::Operation for Append {
-    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
+    fn eval(&self, inputs: &[ArrayViewD<f32>]) -> ArrayD<f32> {
         let x = inputs[0]
             .view()
             .into_dimensionality::<Ix2>()
@@ -93,7 +93,7 @@ impl nodes::Operation for Append {
             }
         }).into_dyn()
     }
-    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+    fn grad(&self, inputs: &[ArrayViewD<f32>], loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         let x = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
         let y = inputs[1].view().into_dimensionality::<Ix2>().unwrap();
         let loss = loss.into_dimensionality::<Ix2>().unwrap();

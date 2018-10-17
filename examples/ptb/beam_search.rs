@@ -45,8 +45,7 @@ impl BeamSearch {
         while top.len() < self.width {
             let codes = weighted_sample(probs.slice(s!(b, ..)), 1);
             for code in codes.iter() {
-                let lp = probs[(b, *code)].ln();
-                let new_log_prob = self.beams[b].log_prob + lp;
+                let new_log_prob = self.beams[b].log_prob + probs[(b, *code)].ln();
                 let mut new_seq = self.beams[b].sequence.to_vec();
                 new_seq.push(*code);
                 top.insert(new_seq, (new_log_prob, b));

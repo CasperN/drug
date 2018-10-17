@@ -51,7 +51,7 @@ impl TextDataSet {
         let mut truncated: Vec<Vec<usize>> = coded_lines
             .into_iter()
             .flat_map(|l| {
-                let v: Vec<Vec<usize>> = l.exact_chunks(seq_len).map(|x| x.to_vec()).collect();
+                let v: Vec<Vec<usize>> = l.chunks_exact(seq_len).map(|x| x.to_vec()).collect();
                 v.into_iter()
             })
             .collect();
@@ -59,7 +59,7 @@ impl TextDataSet {
         thread_rng().shuffle(truncated.as_mut_slice());
 
         let corpus: Vec<Vec<ArrayD<f32>>> = truncated
-            .exact_chunks(batch_size)
+            .chunks_exact(batch_size)
             .map(|chunk| {
                 let mut batch = vec![];
                 for s in 0..seq_len {
