@@ -1,5 +1,5 @@
 //! Doc me por favor
-
+#![feature(chunks_exact)]
 use std::f32;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
@@ -7,7 +7,6 @@ use std::path::Path;
 
 extern crate byteorder;
 extern crate drug;
-#[macro_use(s)]
 extern crate ndarray;
 extern crate ron;
 
@@ -32,28 +31,17 @@ fn reshape_and_iter(
     batch_size: usize, // how many mnist examples to train with in one forward / backward pass
     as_vectors: bool,  // output vectors for a dense network instead of images for convolutional
 ) -> Box<Iterator<Item = ArrayD<f32>>> {
-    let len = data.len() / ROWS / COLS;
-
-    if as_vectors {
-        // Iterate over dataset of batched vectors
-        let flattened = Array::from_shape_vec([len, ROWS * COLS], data).unwrap();
-        let vector_iterator = (0..len / batch_size).map(move |i| {
-            let idx = i * batch_size..(i + 1) * batch_size;
-            flattened.slice(s!(idx, ..)).to_owned().into_dyn()
-        });
-
-        Box::new(vector_iterator)
+    let shape = if as_vectors {
+        vec![batch_size, ROWS * COLS]
     } else {
-        // Iterate over dataset of batched images
-        let images = Array::from_shape_vec([len, ROWS, COLS, 1], data).unwrap();
+        vec![batch_size, ROWS, COLS]
+    };
+    let batched: Vec<ArrayD<f32>> = data
+        .chunks_exact(batch_size * ROWS * COLS)
+        .map(move |x| Array::from_shape_vec(shape.as_slice(), x.to_vec()).unwrap())
+        .collect();
 
-        let image_iterator = (0..len / batch_size).map(move |i| {
-            let idx = i * batch_size..(i + 1) * batch_size;
-            images.slice(s!(idx, .., .., ..)).to_owned().into_dyn()
-        });
-
-        Box::new(image_iterator)
-    }
+    Box::new(batched.into_iter())
 }
 
 /// Simple 3 layer neural network
@@ -72,8 +60,7 @@ fn conv_network(g: &mut Graph, imgs: Idx) -> Idx {
         // Repeating block of our cnn
         let kernel = g.param(&[3, 3, in_channels, out_channels]);
         let conv = g.conv(kernel, in_idx, Padding::Same, 1);
-        let relu = g.relu(conv);
-        relu
+        g.relu(conv)
     };
 
     let b1 = conv_block(g, imgs, 1, 8);
@@ -156,7 +143,7 @@ fn main() {
         g.set_value(imgs, test_images.next().unwrap());
         g.forward();
         let labels = &test_labels[step * batch_size..(step + 1) * batch_size];
-        num_correct += count_correct(g.get_value(out), labels);
+        num_correct += count_correct(&g.get_value(out), labels);
     }
     println!(
         "  Test accuracy: {:?}%",
@@ -187,11 +174,11 @@ fn load_model() -> Result<(Graph, Idx, Idx), Box<std::error::Error>> {
         .named_idxs
         .get("out")
         .expect("Expected named index `out`.");
-    println!("Loaded saved model");
+    println!("Loaded saved model from {:?}", model_path);
     Ok((g, imgs, out))
 }
 
-fn count_correct(logits: ArrayViewD<f32>, labels: &[usize]) -> u32 {
+fn count_correct(logits: &ArrayViewD<f32>, labels: &[usize]) -> u32 {
     let logits = logits.to_owned().into_dimensionality::<Ix2>().unwrap();
     let batch_size = labels.len();
     let mut num_correct = 0;

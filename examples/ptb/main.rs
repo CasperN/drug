@@ -111,7 +111,7 @@ fn main() {
     let batch_size = 32;
     let sequence_len = 50;
     // Note the effective learning_rate is this * batch_size * sequence_len
-    let learning_rate = 0.01 as f32;
+    let learning_rate = 0.001 as f32;
     let summary_every = 250;
     let num_epochs = 1;
 
@@ -228,7 +228,7 @@ fn main() {
             // Update hidden state
             let emb = embedding.add_word(&mut g, words.view());
             let hidden_idxs = rnn.add_cells(&mut g, hidden_idxs, emb);
-            // g.forward();
+            g.forward();
 
             // Take it out of the graph
             let mut hiddens = vec![];

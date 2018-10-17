@@ -62,8 +62,7 @@ impl RecurrentCell for RNNCell {
     fn add_cell(&self, g: &mut Graph, hidden_in: Idx, seq_in: Idx) -> Idx {
         let app = g.op(Append(), &[hidden_in, seq_in]);
         let update = g.matmul(self.weights, app);
-        let hidden_out = g.tanh(update);
-        hidden_out
+        g.tanh(update)
     }
     fn get_hidden0_idx(&self) -> Idx {
         self.hidden0
@@ -104,8 +103,7 @@ impl RecurrentCell for GatedRecurrentUnit {
         let reset = g.sigmoid(r_matmul);
 
         // Combine them and get predictions
-        let hidden_out = g.op(ConvexCombine(), &[hidden_in, feature, reset]);
-        hidden_out
+        g.op(ConvexCombine(), &[hidden_in, feature, reset])
     }
     fn get_hidden0_idx(&self) -> Idx {
         self.hidden0
