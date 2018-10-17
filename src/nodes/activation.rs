@@ -10,7 +10,7 @@ pub enum Activation {
 }
 
 impl Operation for Activation {
-    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
+    fn eval(&self, inputs: &[ArrayViewD<f32>]) -> ArrayD<f32> {
         assert_eq!(inputs.len(), 1, "Activation accepts one input");
         match self {
             Activation::Relu { leak } => inputs[0].mapv(|x| if x > 0.0 { x } else { x * leak }),
@@ -18,7 +18,7 @@ impl Operation for Activation {
             Activation::Tanh => inputs[0].mapv(|x| x.tanh()),
         }
     }
-    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+    fn grad(&self, inputs: &[ArrayViewD<f32>], loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         assert_eq!(inputs.len(), 1, "Activation accepts one input");
 
         let mut res = loss.to_owned();

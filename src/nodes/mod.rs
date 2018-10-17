@@ -31,12 +31,15 @@ mod matmul;
 pub trait Operation: Debug + erased_serde::Serialize {
     /// Mutates Outputs based on inputs.
     /// Future warning: TODO do this in place by passing references and slices`
-    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32>;
+
+    fn eval(&self, inputs: &[ArrayViewD<f32>]) -> ArrayD<f32>;
+    // fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32>;
 
     /// Returns gradients of inputs wrt outputs.
     /// Note the inputs and output vectors should be the same length.
     /// Future warning: TODO do this in place by passing references and slices`
-    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
+    /// TODO fn grad(&self, inputs: &[&ArrayD<f32>] -> Vec<ArrayD<f32>>)
+    fn grad(&self, inputs: &[ArrayViewD<f32>], loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
 }
 serialize_trait_object!(Operation);
 
@@ -116,7 +119,7 @@ impl Node {
             Node::Input(..) | Node::Parameter(..) | Node::Constant => vec![],
         }
     }
-    pub fn forward(&mut self, inputs: Box<[ArrayViewD<f32>]>) -> Option<ArrayD<f32>> {
+    pub fn forward(&mut self, inputs: &[ArrayViewD<f32>]) -> Option<ArrayD<f32>> {
         match self {
             Node::Conv { conv, .. } => Some(conv.eval(inputs)),
             Node::Add { .. } => Some(Add().eval(inputs)),
@@ -132,8 +135,8 @@ impl Node {
     }
     pub fn backward(
         &self,
-        inputs: Box<[ArrayViewD<f32>]>,
-        loss: ArrayViewD<f32>,
+        inputs: &[ArrayViewD<f32>],
+        loss: ArrayViewD<f32>, // &ArrayD<f32>
     ) -> Vec<ArrayD<f32>> {
         match self {
             Node::Conv { conv, .. } => conv.grad(inputs, loss.view()),

@@ -94,10 +94,7 @@ impl Graph {
     /// Registers a parameter of the given shape and initializes the value using the graph's
     /// initializer.
     pub fn param(&mut self, shape: &[usize]) -> Idx {
-        let idx = self.register(Node::Parameter({
-            let x: Vec<usize> = shape.iter().map(|x| *x).collect(); // HACK
-            x.into_boxed_slice()
-        }));
+        let idx = self.register(Node::Parameter(shape.to_vec().into_boxed_slice()));
         self.values.insert(idx.idx, (self.initializer.0)(shape));
         self.losses.insert(idx.idx, Array::zeros(shape));
         self.num_inserted += 1;
@@ -126,7 +123,7 @@ impl Graph {
     fn _forward1(&mut self, i: &usize) {
         if let Some(n) = self.nodes.get_mut(&i) {
             let inps = n.inputs();
-            if let Some(v) = n.forward(view_at_idxs(&inps, &self.values)) {
+            if let Some(v) = n.forward(&view_at_idxs(&inps, &self.values)) {
                 self.values.insert(*i, v);
             }
         }
@@ -144,7 +141,7 @@ impl Graph {
             } else {
                 let inps = n.inputs();
                 let gradients = n.backward(
-                    view_at_idxs(&inps, &self.values),
+                    &view_at_idxs(&inps, &self.values),
                     self.losses.get(&i).unwrap().view(),
                 );
                 for (grad, j) in gradients.iter().zip(inps.iter()) {

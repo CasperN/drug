@@ -13,7 +13,7 @@ pub enum GlobalPool {
 
 #[allow(unused_variables)]
 impl Operation for GlobalPool {
-    fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32> {
+    fn eval(&self, inputs: &[ArrayViewD<f32>]) -> ArrayD<f32> {
         assert_eq!(inputs.len(), 1, "GlobalPool takes one 4d-Array");
         let input = &inputs[0];
 
@@ -24,7 +24,7 @@ impl Operation for GlobalPool {
         }
     }
 
-    fn grad(&self, inputs: Box<[ArrayViewD<f32>]>, loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
+    fn grad(&self, inputs: &[ArrayViewD<f32>], loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         let loss = loss.into_dimensionality::<Ix2>().unwrap();
         if let [n_b, n_i, n_j, n_c] = inputs[0].shape() {
             let res = match self {

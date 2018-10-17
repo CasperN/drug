@@ -99,6 +99,8 @@ pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[usize]) -> 
         log_loss -= softmax[(b, correct)].ln();
         softmax[(b, correct)] -= 1.0;
     }
+    log_loss /= labels.len() as f32;
+
     (log_loss, softmax.into_dyn())
 }
 
