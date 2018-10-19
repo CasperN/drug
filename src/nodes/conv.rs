@@ -215,7 +215,7 @@ mod tests {
         let ker = Array4::zeros([3, 3, 1, 1]).into_dyn();
         let img = Array4::zeros([4, 4, 4, 1]).into_dyn();
         let c = Conv::new(Padding::Same, 1);
-        c.eval(vec![ker.view(), img.view()].into_boxed_slice());
+        c.eval(&[ker.view(), img.view()]);
 
         assert_eq!(
             c.conv_point(4, 4, 3, 3, 0, 0, 0, 0),
@@ -277,7 +277,7 @@ mod tests {
             let kernel = stripe_detector_kernel(*det);
             let stripes = stripes(*st);
             let conv = Conv::new(*padding, 1);
-            let detections = conv.eval(vec![kernel.view(), stripes.view()].into_boxed_slice());
+            let detections = conv.eval(&[kernel.view(), stripes.view()]);
             let detections = detections.slice(s!(0, .., .., 0));
             if *det != *st {
                 assert!(
@@ -313,7 +313,7 @@ mod tests {
 
         let img = stripes(true);
         let conv = Conv::new(Padding::Same, 1);
-        let res = conv.eval(vec![identity_kernel.view(), img.view()].into_boxed_slice());
+        let res = conv.eval(&[identity_kernel.view(), img.view()]);
         let conv = res.slice(s!(0, .., .., 0));
         let orig = img.slice(s!(0, .., .., 0));
 
@@ -332,9 +332,9 @@ mod tests {
 
         let orig = stripes(true);
         let conv = Conv::new(Padding::Same, 1);
-        let eval = conv.eval(vec![identity_kernel.view(), orig.view()].into_boxed_slice());
+        let eval = conv.eval(&[identity_kernel.view(), orig.view()]);
         let grad = conv.grad(
-            vec![identity_kernel.view(), orig.view()].into_boxed_slice(),
+            &[identity_kernel.view(), orig.view()],
             eval.view(),
         );
         assert_eq!(grad.len(), 2);
@@ -352,9 +352,9 @@ mod tests {
         for _ in 0..5 {
             for _ in 0..3 {
                 let img = Array4::from_shape_fn([4, 5, 5, 2], |_| unif.sample(&mut rng)).into_dyn();
-                conv.eval(vec![kernel.view(), img.view()].into_boxed_slice());
+                conv.eval(&[kernel.view(), img.view()]);
                 let grad = conv.grad(
-                    vec![kernel.view(), img.view()].into_boxed_slice(),
+                    &[kernel.view(), img.view()],
                     img.view(),
                 );
                 let g_ker = grad[0].view();
@@ -374,18 +374,18 @@ mod tests {
         let conv = Conv::new(Padding::Same, 1);
         let img = xavier_initialize(&[1, 64, 64, 3]);
 
-        b.iter(|| conv.eval(vec![kernel.view(), img.view()].into_boxed_slice()));
+        b.iter(|| conv.eval(&[kernel.view(), img.view()]));
     }
     #[bench]
     fn grad_3x3x8_kernel_64x64x3_img(b: &mut Bencher) {
         let kernel = xavier_initialize(&[3, 3, 3, 8]);
         let conv = Conv::new(Padding::Same, 1);
         let img = xavier_initialize(&[1, 64, 64, 3]);
-        let out = conv.eval(vec![kernel.view(), img.view()].into_boxed_slice());
+        let out = conv.eval(&[kernel.view(), img.view()]);
 
         b.iter(|| {
             conv.grad(
-                vec![kernel.view(), img.view()].into_boxed_slice(),
+                &[kernel.view(), img.view()],
                 out.view(),
             )
         });

@@ -1,6 +1,6 @@
 [package]
 name = "drug"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Casper Neo <casperneo@uchicago.edu>"]
 license = "MIT"
 repository = "https://github.com/CasperN/drug"

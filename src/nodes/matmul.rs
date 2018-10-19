@@ -38,7 +38,7 @@ mod tests {
         let vecs = arr2(&[[1.0, 2.0], [3.0, 4.0]]).into_dyn();
         let m = MatMul();
 
-        let o = m.eval(vec![weights.view(), vecs.view()].into_boxed_slice());
+        let o = m.eval(&[weights.view(), vecs.view()]);
         assert_eq!(
             o,
             arr2(&[[11.0, 14.0, 17.0, 20.0], [23.0, 30.0, 37.0, 44.0]]).into_dyn()
@@ -49,17 +49,17 @@ mod tests {
         let weights = xavier_initialize(&[100, 150]);
         let vecs = xavier_initialize(&[8, 100]);
         let m = MatMul();
-        b.iter(|| m.eval(vec![weights.view(), vecs.view()].into_boxed_slice()));
+        b.iter(|| m.eval(&[weights.view(), vecs.view()]));
     }
     #[bench]
     fn bench_matmul_grad(b: &mut Bencher) {
         let weights = xavier_initialize(&[100, 150]);
         let vecs = xavier_initialize(&[8, 100]);
         let m = MatMul();
-        let o = m.eval(vec![weights.view(), vecs.view()].into_boxed_slice());
+        let o = m.eval(&[weights.view(), vecs.view()]);
         b.iter(|| {
             m.grad(
-                vec![weights.view(), vecs.view()].into_boxed_slice(),
+                &[weights.view(), vecs.view()],
                 o.view(),
             )
         });
