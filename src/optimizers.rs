@@ -121,7 +121,7 @@ impl Optimizer {
 
         let mut delta = if let Some(ref mut mom) = optimizer_instance.momentum {
             let beta1 = self.beta_momentum;
-            mom.zip_mut_with(&grad, |m, g| *m = (1.0 - beta1) * *m + beta1 * g);
+            mom.zip_mut_with(&grad, |m, g| *m = (1.0 - beta1) * *g + beta1 * *m);
             mom.to_owned() / (1.0 - self.beta_momentum)
         } else {
             grad.to_owned()
@@ -129,9 +129,9 @@ impl Optimizer {
 
         if let Some(ref mut mag) = optimizer_instance.magnitude {
             let beta2 = self.beta_magnitude;
-            mag.zip_mut_with(&grad, |m, g| *m = (1.0 - beta2) * *m + beta2 * g);
+            mag.zip_mut_with(&grad, |m, g| *m = (1.0 - beta2) * g.powi(2) + beta2 * *m);
             let e = self.epsilon;
-            delta.zip_mut_with(mag, |d, m| *d /= m.sqrt() + e);
+            delta.zip_mut_with(mag, |d, m| *d /= (m / (1.0 - beta2)).sqrt() + e);
         }
 
         let lr = self.learning_rate;
