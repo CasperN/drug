@@ -1,18 +1,18 @@
-//! Doc me por favor
+//! Example dense net classifier with MNIST.
 #![feature(chunks_exact)]
+extern crate byteorder;
+extern crate drug;
+extern crate ndarray;
+extern crate ron;
+mod input;
+
 use std::f32;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::path::Path;
 
-extern crate byteorder;
-extern crate drug;
-extern crate ndarray;
-extern crate ron;
-
 use drug::*;
 use ndarray::prelude::*;
-mod input;
 use input::{images, labels};
 
 static MODEL_DIR: &'static str = "/tmp/drug/mnist/";
@@ -129,7 +129,6 @@ fn main() {
             println!("  Step: {:?}\t log loss: {:?}", step, loss);
         }
     }
-
     // old input node exhausted, refresh with test images
     let mut test_images = reshape_and_iter(test_images, batch_size, use_dense);
     // FIXME Input Nodes prevent saving

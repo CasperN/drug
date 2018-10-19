@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-extern crate byteorder;
+
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 
