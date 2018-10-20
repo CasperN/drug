@@ -32,7 +32,8 @@ impl Operation for GlobalPool {
                     let scale = 1.0 / *n_i as f32 / *n_j as f32;
                     Array::from_shape_fn([*n_b, *n_i, *n_j, *n_c], |(b, _, _, c)| {
                         loss[(b, c)] * scale
-                    }).into_dyn()
+                    })
+                    .into_dyn()
                 }
             };
             vec![res]

@@ -1,5 +1,4 @@
 //! Example dense net classifier with MNIST.
-#![feature(chunks_exact)]
 extern crate byteorder;
 extern crate drug;
 extern crate ndarray;

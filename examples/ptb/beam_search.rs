@@ -72,7 +72,8 @@ impl BeamSearch {
         let new_words = Array::from_iter(
             top.iter()
                 .map(|(beam, _)| *beam.sequence.last().expect("Empty beam?") as f32),
-        ).into_dyn();
+        )
+        .into_dyn();
 
         let mut new_hidden = vec![];
         for hid in hidden.iter() {
@@ -80,7 +81,8 @@ impl BeamSearch {
             let new_hid = Array::from_shape_fn([top.len(), hdim], |(b, d)| {
                 let orig = top[b].1;
                 hid[Dim([orig, d])]
-            }).into_dyn();
+            })
+            .into_dyn();
 
             new_hidden.push(new_hid);
         }

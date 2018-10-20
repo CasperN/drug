@@ -256,14 +256,16 @@ mod tests {
             } else {
                 -1.0 / 6.0
             }
-        }).into_dyn()
+        })
+        .into_dyn()
     }
 
     fn stripes(horizontal: bool) -> ArrayD<f32> {
         Array4::from_shape_fn(
             [1, 10, 10, 1],
             move |(_, row, col, _)| if horizontal { row % 2 } else { col % 2 } as f32,
-        ).into_dyn()
+        )
+        .into_dyn()
     }
 
     #[test]
@@ -309,7 +311,8 @@ mod tests {
             } else {
                 0.0
             }
-        }).into_dyn();
+        })
+        .into_dyn();
 
         let img = stripes(true);
         let conv = Conv::new(Padding::Same, 1);
@@ -328,7 +331,8 @@ mod tests {
             } else {
                 0.0
             }
-        }).into_dyn();
+        })
+        .into_dyn();
 
         let orig = stripes(true);
         let conv = Conv::new(Padding::Same, 1);

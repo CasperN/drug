@@ -16,7 +16,8 @@ impl Operation for Embedding {
         Array::from_shape_fn([batch_size, embedding_dim], |(b, d)| {
             let x = code[(b)] as usize;
             embedding[(x, d)]
-        }).into_dyn()
+        })
+        .into_dyn()
     }
 
     fn grad(&self, inputs: &[ArrayViewD<f32>], loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {

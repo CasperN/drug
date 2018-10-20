@@ -91,7 +91,8 @@ impl nodes::Operation for Append {
             } else {
                 y[(b, i - x_len)]
             }
-        }).into_dyn()
+        })
+        .into_dyn()
     }
     fn grad(&self, inputs: &[ArrayViewD<f32>], loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {
         let x = inputs[0].view().into_dimensionality::<Ix2>().unwrap();

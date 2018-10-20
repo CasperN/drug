@@ -1,4 +1,3 @@
-#![feature(chunks_exact)]
 #![allow(clippy::deref_addrof)]
 #[macro_use]
 extern crate ndarray;
