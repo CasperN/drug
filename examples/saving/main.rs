@@ -17,12 +17,12 @@ fn save() {
     assert_eq!(g.get_value(c), arr1(&[3.0, 8.0]).into_dyn());
     g.named_idxs.insert("c".to_string(), c);
 
-    let s = ron::ser::to_string(&g).expect("Error serealizing graph");
     let path = Path::new("/tmp/drug.json");
-    let mut f = File::create(&path).expect("File creation error");
+    let mut file = File::create(&path).expect("File creation error");
 
     println!("Writing graph:\n{}", g);
-    f.write_all(s.as_bytes()).expect("Could not write");
+    let g_str = ron::ser::to_string(&g).expect("Error serealizing graph");
+    file.write_all(g_str.as_bytes()).expect("Could not write");
 }
 
 fn load() {
@@ -30,7 +30,7 @@ fn load() {
     let f = File::open(&path).expect("File open error");
 
     let g: drug::Graph = ron::de::from_reader(&f).unwrap();
-    let c = g.named_idxs.get("c").unwrap();
+    let c = &g.named_idxs["c"];
 
     assert_eq!(g.get_value(*c), arr1(&[3.0, 8.0]).into_dyn());
     println!("Read graph:\n{}", g);

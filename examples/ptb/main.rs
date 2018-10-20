@@ -1,4 +1,5 @@
 #![feature(chunks_exact)]
+#![allow(clippy::deref_addrof)]
 #[macro_use]
 extern crate ndarray;
 extern crate drug;
@@ -34,7 +35,7 @@ impl Embedding {
         Embedding(g.param(&[embedding_len, embedding_dim]))
     }
     // Add batch to graph and return Idx of its embedding
-    fn add_word(&self, g: &mut Graph, word_batch: ArrayViewD<f32>) -> Idx {
+    fn add_word(&self, g: &mut Graph, word_batch: &ArrayD<f32>) -> Idx {
         let word = g.constant(word_batch.to_owned());
         g.embedding(self.0, word)
     }
@@ -69,10 +70,10 @@ fn save_model<T: RecurrentCell>(
     Ok(())
 }
 
-fn load_model<T: RecurrentCell>(
-) -> Result<(Graph, Embedding, Predict, RecurrentLayers<T>), Box<std::error::Error>>
+type StuffToRestore<T> = (Graph, Embedding, Predict, RecurrentLayers<T>);
+fn load_model<T>() -> Result<StuffToRestore<T>, Box<dyn std::error::Error>>
 where
-    T: serde::de::DeserializeOwned,
+    T: RecurrentCell + serde::de::DeserializeOwned,
 {
     let model_path = Path::new(MODEL_DIR).join("computation_graph.bin");
     let f = File::open(&model_path)?;
@@ -111,7 +112,7 @@ fn main() {
     let batch_size = 32;
     let sequence_len = 50;
     // Note the effective learning_rate is this * batch_size * sequence_len
-    let learning_rate = 0.001 as f32;
+    let learning_rate = 0.01 as f32;
     let summary_every = 250;
     let num_epochs = 1;
 
@@ -128,11 +129,11 @@ fn main() {
         let mut g = Graph::default();
         g.optimizer.learning_rate = learning_rate;
 
-        // These structs hold Idx pointing to their parameters and have methods adding operations to
-        // the graph.
+        // These structs hold Idx pointing to their parameters and have methods adding operations
+        // to the graph.
         let embedding = Embedding::new(&mut g, num_symbols, dimensions[0]);
         let predict = Predict::new(&mut g, *dimensions.last().unwrap(), num_symbols);
-        let rnn = RecurrentLayers::<GatedRecurrentUnit>::new(&mut g, dimensions);
+        let rnn = RecurrentLayers::<GatedRecurrentUnit>::new(&mut g, &dimensions);
 
         g.named_idxs.insert("embedding".to_string(), embedding.0);
         g.named_idxs.insert("predict".to_string(), predict.0);
@@ -155,8 +156,8 @@ fn main() {
                 } else {
                     None
                 };
-                let emb = embedding.add_word(&mut g, word_batch.view());
-                hiddens = rnn.add_cells(&mut g, hiddens, emb);
+                let emb = embedding.add_word(&mut g, &word_batch);
+                hiddens = rnn.add_cells(&mut g, &hiddens, emb);
 
                 output.push((pred, word_batch));
             }
@@ -226,8 +227,8 @@ fn main() {
                 hidden_idxs.push(g.constant(h));
             }
             // Update hidden state
-            let emb = embedding.add_word(&mut g, words.view());
-            let hidden_idxs = rnn.add_cells(&mut g, hidden_idxs, emb);
+            let emb = embedding.add_word(&mut g, &words);
+            let hidden_idxs = rnn.add_cells(&mut g, &hidden_idxs, emb);
             g.forward();
 
             // Take it out of the graph

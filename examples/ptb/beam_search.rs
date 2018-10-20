@@ -34,7 +34,7 @@ impl BeamSearch {
     /// Returns next hidden state and next words of the RNN sequence
     pub fn search(
         &mut self,
-        hidden: &Vec<ArrayD<f32>>,
+        hidden: &[ArrayD<f32>],
         logits: ArrayViewD<f32>,
         temperature: f32,
     ) -> (Vec<ArrayD<f32>>, ArrayD<f32>) {
@@ -100,8 +100,8 @@ fn weighted_sample(weights: ArrayView1<f32>, width: usize) -> Vec<usize> {
     while res.len() < width.min(weights.len()) {
         let mut x = unif.sample(&mut rng);
         let mut code = 0;
-        for i in 0..len {
-            x -= weights[i];
+        for w in weights.iter().take(len) {
+            x -= w;
             if x > 0.0 {
                 code += 1;
             } else {

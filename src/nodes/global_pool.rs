@@ -68,12 +68,10 @@ mod tests {
         let inputs = Array::zeros([2, 3, 4, 5]).into_dyn();
         let losses = Array::ones([2, 5]).into_dyn();
         let g = GlobalPool::Average;
-        let grad =
-            g.grad(
-                &[inputs.view().into_dyn()],
-                losses.view(),
-            ).pop()
-                .unwrap();
+        let grad = g
+            .grad(&[inputs.view().into_dyn()], losses.view())
+            .pop()
+            .unwrap();
         // .into_dimensionality::<Ix4>()
         // .unwrap();
         assert_eq!(

@@ -15,7 +15,7 @@ pub struct TextDataSet {
     pub corpus: Vec<Vec<ArrayD<f32>>>,
 }
 impl TextDataSet {
-    pub fn decode(&self, codes: &Vec<usize>) -> String {
+    pub fn decode(&self, codes: &[usize]) -> String {
         codes.iter().map(|c| self.idx2char[*c]).collect()
     }
 
@@ -28,26 +28,21 @@ impl TextDataSet {
         let mut coded_lines = Vec::new();
         let mut char2idx = HashMap::new();
         let mut idx2char = Vec::new();
-
         // Tokenize characters
         for str_line in contents.lines() {
             let mut line = Vec::new();
 
             for c in str_line.chars() {
-                if char2idx.contains_key(&c) {
-                    let idx = char2idx.get(&c).unwrap();
-                    line.push(*idx);
-                } else {
-                    let new_idx = idx2char.len();
-                    char2idx.insert(c, new_idx);
+                // Insert token `idx` and register new character if unseen.
+                let token = char2idx.entry(c).or_insert_with(|| {
                     idx2char.push(c);
-                    line.push(new_idx);
-                }
+                    idx2char.len() - 1
+                });
+                line.push(*token);
             }
             coded_lines.push(line);
         }
-        // Sort lines by length so sequences in the same batch are the same length
-
+        // Cut up long lines to seq_len length
         let mut truncated: Vec<Vec<usize>> = coded_lines
             .into_iter()
             .flat_map(|l| {
@@ -55,9 +50,9 @@ impl TextDataSet {
                 v.into_iter()
             })
             .collect();
-
         thread_rng().shuffle(truncated.as_mut_slice());
 
+        // Batchify
         let corpus: Vec<Vec<ArrayD<f32>>> = truncated
             .chunks_exact(batch_size)
             .map(|chunk| {

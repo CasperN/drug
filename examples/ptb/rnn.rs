@@ -17,7 +17,7 @@ pub struct RecurrentLayers<T: RecurrentCell> {
     layers: Vec<T>,
 }
 impl<T: RecurrentCell> RecurrentLayers<T> {
-    pub fn new(g: &mut Graph, dimensions: Vec<usize>) -> RecurrentLayers<T> {
+    pub fn new(g: &mut Graph, dimensions: &[usize]) -> RecurrentLayers<T> {
         assert!(
             dimensions.len() > 1,
             "Need to specify at least 1 input and output layer"
@@ -31,7 +31,7 @@ impl<T: RecurrentCell> RecurrentLayers<T> {
     pub fn get_hidden0_idxs(&self) -> Vec<Idx> {
         self.layers.iter().map(|l| l.get_hidden0_idx()).collect()
     }
-    pub fn add_cells(&self, g: &mut Graph, hiddens: Vec<Idx>, seq_in: Idx) -> Vec<Idx> {
+    pub fn add_cells(&self, g: &mut Graph, hiddens: &[Idx], seq_in: Idx) -> Vec<Idx> {
         assert_eq!(self.layers.len(), hiddens.len());
         let mut h = seq_in;
         let mut new_hiddens = vec![];

@@ -12,8 +12,8 @@ use std::io::Write;
 use std::path::Path;
 
 use drug::*;
-use ndarray::prelude::*;
 use input::{images, labels};
+use ndarray::prelude::*;
 
 static MODEL_DIR: &'static str = "/tmp/drug/mnist/";
 static DATA: &'static str = "examples/data/";
@@ -27,7 +27,7 @@ static ROWS: usize = 28;
 static COLS: usize = 28;
 
 fn reshape_and_iter(
-    data: Vec<f32>,    // The mnist data read from file
+    data: &[f32],      // The mnist data read from file
     batch_size: usize, // how many mnist examples to train with in one forward / backward pass
     as_vectors: bool,  // output vectors for a dense network instead of images for convolutional
 ) -> Box<Iterator<Item = ArrayD<f32>>> {
@@ -49,9 +49,8 @@ fn dense_network(g: &mut Graph, imgs: Idx) -> Idx {
     let weights_1 = g.param(&[ROWS * COLS, 110]);
     let weights_2 = g.param(&[110, 10]);
     let mat_mul_1 = g.matmul(weights_1, imgs);
-    let sigmoid_1 = g.sigmoid(mat_mul_1);
-    let mat_mul_2 = g.matmul(weights_2, sigmoid_1);
-    g.sigmoid(mat_mul_2)
+    let sigmoid = g.sigmoid(mat_mul_1);
+    g.matmul(weights_2, sigmoid)
 }
 
 /// 3 layer Convolutional neural network
@@ -75,7 +74,7 @@ fn conv_network(g: &mut Graph, imgs: Idx) -> Idx {
 
 /// this is main
 fn main() {
-    let learning_rate = 0.25;
+    let learning_rate = 0.05;
     let batch_size = 8;
     let train_steps = TR_LEN as usize / batch_size;
     let use_dense = true;
@@ -87,7 +86,7 @@ fn main() {
     let test_images = images(&Path::new(DATA).join(TS_IMG), TS_LEN);
     let test_labels = labels(&Path::new(DATA).join(TS_LBL), TS_LEN);
 
-    let mut train_images = reshape_and_iter(train_images, batch_size, use_dense);
+    let mut train_images = reshape_and_iter(&train_images, batch_size, use_dense);
 
     let (mut g, imgs, out) = load_model().unwrap_or_else(|e| {
         println!("Couldn't load graph because `{:?}`", e);
@@ -130,7 +129,7 @@ fn main() {
         }
     }
     // old input node exhausted, refresh with test images
-    let mut test_images = reshape_and_iter(test_images, batch_size, use_dense);
+    let mut test_images = reshape_and_iter(&test_images, batch_size, use_dense);
     // FIXME Input Nodes prevent saving
     // g.replace_input_iterator(imgs, test_images).unwrap();
 

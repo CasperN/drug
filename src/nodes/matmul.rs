@@ -57,11 +57,6 @@ mod tests {
         let vecs = xavier_initialize(&[8, 100]);
         let m = MatMul();
         let o = m.eval(&[weights.view(), vecs.view()]);
-        b.iter(|| {
-            m.grad(
-                &[weights.view(), vecs.view()],
-                o.view(),
-            )
-        });
+        b.iter(|| m.grad(&[weights.view(), vecs.view()], o.view()));
     }
 }
