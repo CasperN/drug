@@ -101,9 +101,8 @@ impl Graph {
         idx
     }
     /// Registers an input node which advances the iterator `it` each forward pass.
-    /// WARNING this prevents saving with serde.
-    pub fn input(&mut self, it: Box<Iterator<Item = ArrayD<f32>>>) -> Idx {
-        self.register(Node::Input(it))
+    pub fn input(&mut self, it: Option<Box<Iterator<Item = ArrayD<f32>>>>) -> Idx {
+        self.register(Node::Input{it})
     }
     /// Registers an operation and its inputs
     pub fn op(&mut self, op: impl Operation + 'static, inputs: &[Idx]) -> Idx {
@@ -227,8 +226,8 @@ impl Graph {
     ) -> Result<(), String> {
         if let Some(n) = self.nodes.get_mut(&idx.idx) {
             match n {
-                Node::Input(old) => *old = new,
-                Node::Constant => *n = Node::Input(new),
+                Node::Input{it} => *it = Some(new),
+                Node::Constant => *n = Node::Input{it: Some(new)},
                 _ => {
                     return Err("Tried to replace input iter at non Input/Constant node.".to_string())
                 }

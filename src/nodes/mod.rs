@@ -76,12 +76,14 @@ pub enum Node {
     },
 
     /// Produce Value from beyond the graph.
-    /// * In a forward pass, its value is updates by the iterator.
+    /// * In a forward pass, its value is updates by the iterator or panics if its None
     /// * In a backward pass, its losses are currently calculated but unused.
-    /// FIXME this prevents saving with serde (boxed iterator). Constants should be used instead.
-    /// Perhaps these can be automatically converted to constants at serialization time?
-    #[serde(skip)]
-    Input(#[debug_stub = "Box<Iterator<Item=ArrayD<f32>>>"] Box<Iterator<Item = ArrayD<f32>>>),
+    /// * When serializing, the internal iterator is ignored. It deserializes to None.
+    Input{
+        #[serde(skip)]
+        #[debug_stub = "Option<Box<Iterator<Item=ArrayD<f32>>>>"]
+        it: Option<Box<Iterator<Item = ArrayD<f32>>>>,
+    },
 
     /// Parameter nodes only hold a shape. Its values are initialized when inserted into the graph
     /// using the graph's initializer.
@@ -116,7 +118,7 @@ impl Node {
             Node::Embedding { emb, code } => vec![*emb, *code],
             Node::GlobalPool { x, .. } => vec![*x],
             Node::Operation { inputs, .. } => inputs.to_vec(),
-            Node::Input(..) | Node::Parameter(..) | Node::Constant => vec![],
+            Node::Input{..} | Node::Parameter(..) | Node::Constant => vec![],
         }
     }
     pub fn forward(&mut self, inputs: &[ArrayViewD<f32>]) -> Option<ArrayD<f32>> {
@@ -129,7 +131,7 @@ impl Node {
             Node::Embedding { .. } => Some(Embedding().eval(inputs)),
             Node::GlobalPool { pool, .. } => Some(pool.eval(inputs)),
             Node::Operation { operation, .. } => Some(operation.eval(inputs)),
-            Node::Input(ref mut it) => it.next(),
+            Node::Input{ref mut it} => it.as_mut().expect("Input node uninitialized.").next(),
             Node::Parameter(..) | Node::Constant => None,
         }
     }
@@ -147,7 +149,7 @@ impl Node {
             Node::Embedding { .. } => Embedding().grad(inputs, loss.view()),
             Node::GlobalPool { pool, .. } => pool.grad(inputs, loss.view()),
             Node::Operation { operation, .. } => operation.grad(inputs, loss.view()),
-            Node::Input(..) | Node::Constant | Node::Parameter(..) => vec![],
+            Node::Input{..} | Node::Constant | Node::Parameter(..) => vec![],
         }
     }
 }

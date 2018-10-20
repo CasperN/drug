@@ -26,6 +26,7 @@ static TS_LEN: u32 = 10_000;
 static ROWS: usize = 28;
 static COLS: usize = 28;
 
+// TODO: Replace with chunker, shuffle and batchify function for multiple epochs.
 fn reshape_and_iter(
     data: &[f32],      // The mnist data read from file
     batch_size: usize, // how many mnist examples to train with in one forward / backward pass
@@ -86,16 +87,14 @@ fn main() {
     let test_images = images(&Path::new(DATA).join(TS_IMG), TS_LEN);
     let test_labels = labels(&Path::new(DATA).join(TS_LBL), TS_LEN);
 
-    let mut train_images = reshape_and_iter(&train_images, batch_size, use_dense);
+    let train_images = reshape_and_iter(&train_images, batch_size, use_dense);
 
     let (mut g, imgs, out) = load_model().unwrap_or_else(|e| {
         println!("Couldn't load graph because `{:?}`", e);
         println!("Building new graph...");
 
         let mut g = Graph::default();
-        // FIXME Input Nodes prevent saving
-        // let imgs = g.input(train_images);
-        let imgs = g.constant(arr0(0.0).into_dyn());
+        let imgs = g.input(None); // Set the iterator later
 
         let out = if use_dense {
             dense_network(&mut g, imgs)
@@ -113,9 +112,9 @@ fn main() {
 
     println!("{}", g);
 
+    g.replace_input_iterator(imgs, train_images).unwrap();
     println!("Training...");
     for step in 0..train_steps {
-        g.set_value(imgs, train_images.next().unwrap());
         g.forward();
 
         let labels = &train_labels[step * batch_size..(step + 1) * batch_size];
