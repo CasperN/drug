@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::{f32, fmt};
 use Idx;
 
-#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 struct OptimizerInstance {
     /// Accumulates average gradient. Used in Momentum and Adam
@@ -34,7 +33,6 @@ struct OptimizerInstance {
 //     * Adadelta auto LR with RMS(param) / RMS(grad)
 //     * Adamax {L1, L2, Max}-Norm for magnitude component
 //     * don't do Nesterov accleration b/c needs graph ownership for lookahead?
-#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Optimizer {
     pub learning_rate: f32,
@@ -66,7 +64,6 @@ impl fmt::Display for Optimizer {
     }
 }
 
-#[allow(dead_code)]
 impl Optimizer {
     pub fn new(learning_rate: f32, beta_momentum: f32, beta_magnitude: f32, epsilon: f32) -> Self {
         let data = HashMap::new();

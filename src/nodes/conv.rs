@@ -1,4 +1,3 @@
-#![allow(clippy::deref_addrof)]
 use ndarray::{Array4, ArrayD, ArrayViewD, Ix4};
 use nodes::Operation;
 
@@ -19,7 +18,6 @@ pub struct Conv {
 /// center of a convolution. `Same` padding allows for convolution of edge pixels by assuming
 /// the values beyond the images are equal to the edge. Other not implemented padding strategies
 /// are "Zero" padding or "Reflection" padding.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Padding {
     Same,
@@ -44,7 +42,6 @@ struct ConvDims {
 }
 
 impl Conv {
-    #[allow(dead_code)]
     pub fn new(padding: Padding, stride: usize) -> Self {
         Conv {
             _dialation: 1,
@@ -86,7 +83,7 @@ impl Conv {
 }
 
 impl Operation for Conv {
-    #[allow(unused_mut)]
+    #[allow(clippy::deref_addrof)]
     fn eval(&self, inputs: &[ArrayViewD<f32>]) -> ArrayD<f32> {
         assert!(
             inputs.len() == 2,
@@ -223,31 +220,75 @@ mod tests {
         let c = Conv::new(Padding::Same, 1);
         c.eval(&[ker.view(), img.view()]);
 
-
-        let size = ConvDims{ i: 4, j: 4, di: 3, dj: 3 };
+        let size = ConvDims {
+            i: 4,
+            j: 4,
+            di: 3,
+            dj: 3,
+        };
 
         assert_eq!(
-            c.conv_point(&size, &ConvDims{i:0, j:0, di:0, dj:0 }),
+            c.conv_point(
+                &size,
+                &ConvDims {
+                    i: 0,
+                    j: 0,
+                    di: 0,
+                    dj: 0
+                }
+            ),
             Some((0, 0)),
             "Top left going up and left"
         );
         assert_eq!(
-            c.conv_point(&size, &ConvDims{i:0, j:3, di:2, dj:2 }),
+            c.conv_point(
+                &size,
+                &ConvDims {
+                    i: 0,
+                    j: 3,
+                    di: 2,
+                    dj: 2
+                }
+            ),
             Some((1, 3)),
             "Top right going down and right"
         );
         assert_eq!(
-            c.conv_point(&size, &ConvDims{i:2, j:2, di:1, dj:1 }),
+            c.conv_point(
+                &size,
+                &ConvDims {
+                    i: 2,
+                    j: 2,
+                    di: 1,
+                    dj: 1
+                }
+            ),
             Some((2, 2)),
             "Center going center"
         );
         assert_eq!(
-            c.conv_point(&size, &ConvDims{i:3, j:3, di:0, dj:0 }),
+            c.conv_point(
+                &size,
+                &ConvDims {
+                    i: 3,
+                    j: 3,
+                    di: 0,
+                    dj: 0
+                }
+            ),
             Some((2, 2)),
             "Bottom right going up and left"
         );
         assert_eq!(
-            c.conv_point(&size, &ConvDims{i:3, j:3, di:0, dj:2 }),
+            c.conv_point(
+                &size,
+                &ConvDims {
+                    i: 3,
+                    j: 3,
+                    di: 0,
+                    dj: 2
+                }
+            ),
             Some((2, 3)),
             "Bottom right going down and left"
         );
