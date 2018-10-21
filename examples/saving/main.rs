@@ -14,7 +14,7 @@ fn save() {
     let b = g.constant(arr1(&[3.0, 4.0]).into_dyn());
     let c = g.mult(&[a, b]);
     g.forward();
-    assert_eq!(g.get_value(c), arr1(&[3.0, 8.0]).into_dyn());
+    assert_eq!(*g.get_value(c), arr1(&[3.0, 8.0]).into_dyn());
     g.named_idxs.insert("c".to_string(), c);
 
     let path = Path::new("/tmp/drug.json");
@@ -32,7 +32,7 @@ fn load() {
     let g: drug::Graph = ron::de::from_reader(&f).unwrap();
     let c = &g.named_idxs["c"];
 
-    assert_eq!(g.get_value(*c), arr1(&[3.0, 8.0]).into_dyn());
+    assert_eq!(*g.get_value(*c), arr1(&[3.0, 8.0]).into_dyn());
     println!("Read graph:\n{}", g);
 }
 

@@ -1,7 +1,9 @@
 use ndarray::prelude::*;
 use nodes::Operation;
 
-/// Pulls out an embedding vector given the index and
+/// Trainable embedding operation, given an index and a 2d-array of embedding vectors,
+/// index into the embedding vectors. `FIXME` drug hardcodes `ArrayD<f32>` inside the graph so
+/// the index should be a `batch_size` length `arrayD<f32>` where the values are integers.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Embedding();
 

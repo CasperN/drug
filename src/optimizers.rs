@@ -1,6 +1,6 @@
 //! This module holds the various optimizers used to update parameters in a computation graph.
 //! Currently only one is implemented.
-use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
+use ndarray::{ArrayD, ArrayViewMutD};
 use std::collections::HashMap;
 use std::{f32, fmt};
 use Idx;
@@ -15,9 +15,18 @@ struct OptimizerInstance {
     // param_magnitude for Adadelta
 }
 
-/// A Good Blog comparing different optimizers. The `Optimizer` builds `OptimizerInstance`s which
-/// hold specific runtime information about the parameter being optimized.
-/// http://ruder.io/optimizing-gradient-descent/index.html#momentum
+/// Here is a good [blog that explains various optimizers](http://ruder.io/optimizing-gradient-descent/index.html).
+/// Currently only SGD, RMSProp, Adam, and SGD-with-momentum are implemented.
+/// The `Optimizer`struct builds and holds `OptimizerInstance`s which
+/// hold runtime information about every parameter that's being optimized.
+/// If `beta_momentum` or `beta_magnitude` are set to zero, then the optimizer does not keep
+/// momentum and magnitude correction information information about parameters.
+/// `epsilon` is added to denominators to avoid divide by zero errors.
+///
+/// | | no `beta_momentum` |`beta_momentum`|
+/// |---|---|---|
+/// |**no `beta_magnitude`** |vanilla SGD |     SGD with momentum
+/// |**`beta_magnitude`** |   RMSProp |         Adam
 // IDEA/TODO
 // * Replace optimizer trait with this!
 // * Builder?
@@ -108,15 +117,10 @@ impl Optimizer {
         self.data.insert(i, instance);
     }
     /// Apply gradient
-    pub fn apply_gradient(
-        &mut self,
-        i: &Idx,
-        mut param: ArrayViewMutD<f32>,
-        grad: ArrayViewD<f32>,
-    ) {
+    pub fn apply_gradient(&mut self, i: Idx, mut param: ArrayViewMutD<f32>, grad: &ArrayD<f32>) {
         let optimizer_instance = self
             .data
-            .get_mut(i)
+            .get_mut(&i)
             .expect("Attempted to apply gradient to unregistered parameter");
 
         let mut delta = if let Some(ref mut mom) = optimizer_instance.momentum {

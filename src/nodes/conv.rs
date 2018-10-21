@@ -1,3 +1,4 @@
+#![allow(clippy::deref_addrof)]
 use ndarray::{Array4, ArrayD, ArrayViewD, Ix4};
 use nodes::Operation;
 
@@ -13,7 +14,7 @@ pub struct Conv {
     padding: Padding,
 }
 
-/// Type of padding to use in a convolutional neural network. `No` padding means a non-strided
+/// Type of padding to use in a [Conv](nodes/struct.Conv.html) node . `No` padding means a non-strided
 /// convolution will shrink by the dimensions of the kernel as pixels at the edge will not be the
 /// center of a convolution. `Same` padding allows for convolution of edge pixels by assuming
 /// the values beyond the images are equal to the edge. Other not implemented padding strategies
@@ -35,6 +36,13 @@ impl Default for Conv {
     }
 }
 
+struct ConvDims {
+    i: usize,
+    j: usize,
+    di: usize,
+    dj: usize,
+}
+
 impl Conv {
     #[allow(dead_code)]
     pub fn new(padding: Padding, stride: usize) -> Self {
@@ -45,39 +53,29 @@ impl Conv {
         }
     }
     #[inline(always)]
-    fn conv_point(
-        &self,
-        n_i: usize,
-        n_j: usize,
-        n_di: usize,
-        n_dj: usize,
-        i: usize,
-        j: usize,
-        di: usize,
-        dj: usize,
-    ) -> Option<(usize, usize)> {
+    fn conv_point(&self, size: &ConvDims, idx: &ConvDims) -> Option<(usize, usize)> {
         // Returns the index of the point of the input image image multiplied by the Kernel
         // in the convolution.
-        let kernel_offset_i = n_di >> 1;
-        let kernel_offset_j = n_dj >> 1;
+        let kernel_offset_i = size.di >> 1;
+        let kernel_offset_j = size.dj >> 1;
 
         match self.padding {
             Padding::Same => {
                 // subtract kernel size / 2 to center kernel
-                let ci = (i * self.stride.0 + di)
+                let ci = (idx.i * self.stride.0 + idx.di)
                     .saturating_sub(kernel_offset_i)
-                    .min(n_i - 1);
-                let cj = (j * self.stride.1 + dj)
+                    .min(size.i - 1);
+                let cj = (idx.j * self.stride.1 + idx.dj)
                     .saturating_sub(kernel_offset_j)
-                    .min(n_j - 1);
+                    .min(size.j - 1);
                 Some((ci, cj))
             }
             Padding::No => {
                 // No padding so next image is di (dj) rows (cols) smaller
-                if kernel_offset_i <= i && i + n_di < n_i {
-                    let ci = i * self.stride.0 + di - kernel_offset_i;
-                    if kernel_offset_j <= j && j + n_dj < n_j {
-                        let cj = j * self.stride.1 + dj - kernel_offset_j;
+                if kernel_offset_i <= idx.i && idx.i + size.di < size.i {
+                    let ci = idx.i * self.stride.0 + idx.di - kernel_offset_i;
+                    if kernel_offset_j <= idx.j && idx.j + size.dj < size.j {
+                        let cj = idx.j * self.stride.1 + idx.dj - kernel_offset_j;
                         return Some((ci, cj));
                     }
                 }
@@ -110,7 +108,12 @@ impl Operation for Conv {
                 Padding::Same => (n_i / self.stride.0, n_j / self.stride.1),
                 Padding::No => ((n_i - n_di) / self.stride.0, (n_j - n_dj) / self.stride.1),
             };
-
+            let size = ConvDims {
+                i: *n_i,
+                j: *n_j,
+                di: *n_di,
+                dj: *n_dj,
+            };
             let mut output = Array4::zeros([*n_b, out_i, out_j, *n_c1]);
 
             for b in 0..*n_b {
@@ -118,9 +121,8 @@ impl Operation for Conv {
                     for j in 0..out_j {
                         for di in 0..*n_di {
                             for dj in 0..*n_dj {
-                                if let Some((ci, cj)) =
-                                    self.conv_point(*n_i, *n_j, *n_di, *n_dj, i, j, di, dj)
-                                {
+                                let idx = ConvDims { i, j, di, dj };
+                                if let Some((ci, cj)) = self.conv_point(&size, &idx) {
                                     let ker = kernel.slice(s!(di, dj, .., ..));
                                     let img = image.slice(s!(b, ci, cj, ..));
                                     let mut out = output.slice_mut(s!(b, i, j, ..));
@@ -157,17 +159,21 @@ impl Operation for Conv {
             let mut grad_kernel = Array4::zeros([*n_di, *n_dj, *n_c0, *n_c1]);
             let mut grad_image = Array4::zeros([*n_b, *n_i, *n_j, *n_c0]);
 
-            // Benchmarks suggests that iproduct is in fact not zero cost.
-            // I suspect that manually unrolling the loop or implementing blocking
-            // will further performance too.
+            let size = ConvDims {
+                i: *n_i,
+                j: *n_j,
+                di: *n_di,
+                dj: *n_dj,
+            };
+            // Benchmarks suggests that iproduct is in fact not zero cost (slower than this).
+            // manually nrolling the loop or implementing blocking may increase performance...
             for b in 0..*n_b {
                 for i in 0..out_i {
                     for j in 0..out_j {
                         for di in 0..*n_di {
                             for dj in 0..*n_dj {
-                                if let Some((ci, cj)) =
-                                    self.conv_point(*n_i, *n_j, *n_di, *n_dj, i, j, di, dj)
-                                {
+                                let idx = ConvDims { i, j, di, dj };
+                                if let Some((ci, cj)) = self.conv_point(&size, &idx) {
                                     // // OPTIMIZE Batch version is worse, I'm guessing due to cache
                                     // // inefficency because the stride for `b` is so large
                                     // let img = image.slice(s!(.., ci, cj, ..));
@@ -217,28 +223,31 @@ mod tests {
         let c = Conv::new(Padding::Same, 1);
         c.eval(&[ker.view(), img.view()]);
 
+
+        let size = ConvDims{ i: 4, j: 4, di: 3, dj: 3 };
+
         assert_eq!(
-            c.conv_point(4, 4, 3, 3, 0, 0, 0, 0),
+            c.conv_point(&size, &ConvDims{i:0, j:0, di:0, dj:0 }),
             Some((0, 0)),
             "Top left going up and left"
         );
         assert_eq!(
-            c.conv_point(4, 4, 3, 3, 0, 3, 2, 2),
+            c.conv_point(&size, &ConvDims{i:0, j:3, di:2, dj:2 }),
             Some((1, 3)),
             "Top right going down and right"
         );
         assert_eq!(
-            c.conv_point(4, 4, 3, 3, 2, 2, 1, 1),
+            c.conv_point(&size, &ConvDims{i:2, j:2, di:1, dj:1 }),
             Some((2, 2)),
             "Center going center"
         );
         assert_eq!(
-            c.conv_point(4, 4, 3, 3, 3, 3, 0, 0),
+            c.conv_point(&size, &ConvDims{i:3, j:3, di:0, dj:0 }),
             Some((2, 2)),
             "Bottom right going up and left"
         );
         assert_eq!(
-            c.conv_point(4, 4, 3, 3, 3, 3, 0, 2),
+            c.conv_point(&size, &ConvDims{i:3, j:3, di:0, dj:2 }),
             Some((2, 3)),
             "Bottom right going down and left"
         );

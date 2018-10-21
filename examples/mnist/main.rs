@@ -174,7 +174,7 @@ fn load_model() -> Result<(Graph, Idx, Idx), Box<std::error::Error>> {
     Ok((g, imgs, out))
 }
 
-fn count_correct(logits: &ArrayViewD<f32>, labels: &[usize]) -> u32 {
+fn count_correct(logits: &ArrayD<f32>, labels: &[usize]) -> u32 {
     let logits = logits.to_owned().into_dimensionality::<Ix2>().unwrap();
     let batch_size = labels.len();
     let mut num_correct = 0;

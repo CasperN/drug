@@ -1,9 +1,9 @@
 use ndarray::prelude::*;
 use nodes::Operation;
 
-// TODO enum max pool, avg pool, sum pool, min pool
 #[derive(Debug, Serialize, Deserialize)]
-/// Type of pooling operation (only supports average).
+/// Type of pooling operation (currently there is only average pooling).
+/// TODO enum max pool, avg pool, sum pool, min pool
 /// Implements [Operation](trait.Operation.html).
 /// See [Node](enum.Node.html) constructor for full description.
 pub enum GlobalPool {

@@ -12,7 +12,6 @@ pub use self::embedding::Embedding;
 pub use self::global_pool::GlobalPool;
 pub use self::matmul::MatMul;
 
-use erased_serde;
 use graph::Idx;
 use ndarray::prelude::*;
 use std::fmt::Debug;
@@ -26,55 +25,27 @@ mod matmul;
 /// Represents a differentiable function in a computation graph.
 /// Operations hold their own hyperparameters but not their parameters, values or losses.
 /// Unfortunately boxed traits cannot be saved with serde. When reloaded they will be replaced
-/// by Boxed<arithmetic::Add> nodes. When reloading a model with custom Operations, you need to
+/// by `Box<arithmetic::Add>` nodes. When reloading a model with custom Operations, you need to
 /// replace them manually.
-pub trait Operation: Debug + erased_serde::Serialize {
+pub trait Operation: Debug {
     /// Mutates Outputs based on inputs.
-    /// Future warning: TODO do this in place by passing references and slices`
-
+    /// TODO consider modifying output ArrayD<f32>  in place
     fn eval(&self, inputs: &[ArrayViewD<f32>]) -> ArrayD<f32>;
     // fn eval(&self, inputs: Box<[ArrayViewD<f32>]>) -> ArrayD<f32>;
 
     /// Returns gradients of inputs wrt outputs.
     /// Note the inputs and output vectors should be the same length.
-    /// Future warning: TODO do this in place by passing references and slices`
-    /// TODO fn grad(&self, inputs: &[&ArrayD<f32>] -> Vec<ArrayD<f32>>)
+    /// TODO consider modifying output ArrayD<f32>s  in place
     fn grad(&self, inputs: &[ArrayViewD<f32>], loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>>;
 }
 serialize_trait_object!(Operation);
 
 #[derive(DebugStub, Serialize, Deserialize)]
 /// Nodes are the building blocks of the [computation graph](../struct.Graph.html).
-/// The variants of a node differ in how the value is produced and how loss is propagated back
+/// The variants of a node differ in how the value is produced and how loss is propagated back.
+/// Users typically interact with Nodes with their index `:Idx` which is returned by the graph
+/// when registered / created.
 pub enum Node {
-    Conv {
-        kernel: Idx,
-        img: Idx,
-        conv: Conv,
-    },
-    Add {
-        xs: Vec<Idx>,
-    },
-    Mult {
-        xs: Vec<Idx>,
-    },
-    MatMul {
-        mat: Idx,
-        v: Idx,
-    },
-    Activation {
-        x: Idx,
-        a: Activation,
-    },
-    Embedding {
-        emb: Idx,
-        code: Idx,
-    },
-    GlobalPool {
-        pool: GlobalPool,
-        x: Idx,
-    },
-
     /// Produce Value from beyond the graph.
     /// * In a forward pass, its value is updates by the iterator or panics if its None
     /// * In a backward pass, its losses are currently calculated but unused.
@@ -90,7 +61,20 @@ pub enum Node {
     /// * In a foward pass, parameters are ignored.
     /// * In a backward pass, their losses are applied by the graph's optimizer.
     Parameter(Box<[usize]>),
-
+    /// See [Conv](struct.Conv.html) for more.
+    Conv { kernel: Idx, img: Idx, conv: Conv },
+    /// See [Add](struct.Add.html) for more.
+    Add { xs: Vec<Idx> },
+    /// See [Mult](struct.Mult.html) for more.
+    Mult { xs: Vec<Idx> },
+    /// See [Matmul](struct.Matmul.html) for more.
+    MatMul { mat: Idx, v: Idx },
+    /// See [Activation](enum.Activation.html) for more.
+    Activation { x: Idx, a: Activation },
+    /// See [Embedding](struct.Embedding.html) for more.
+    Embedding { emb: Idx, code: Idx },
+    /// See [GlobalPool](struct.GlobalPool.html) for more.
+    GlobalPool { pool: GlobalPool, x: Idx },
     /// An Operation node holds an [Operation trait object](trait.Operation.html) and the indices
     /// referring to its input values.
     /// * In a forward pass, its value is updated by the `operation` and the values indexed by
@@ -138,7 +122,7 @@ impl Node {
     pub fn backward(
         &self,
         inputs: &[ArrayViewD<f32>],
-        loss: ArrayViewD<f32>, // &ArrayD<f32>
+        loss: &ArrayD<f32>, // &ArrayD<f32>
     ) -> Vec<ArrayD<f32>> {
         match self {
             Node::Conv { conv, .. } => conv.grad(inputs, loss.view()),

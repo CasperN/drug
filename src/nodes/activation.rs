@@ -1,7 +1,7 @@
 use ndarray::{ArrayD, ArrayViewD};
 use nodes::Operation;
 
-/// Elementwise Relu [Operation](trait.Operation.html).
+/// Elementwise Activation, which could be leaky relu, sigmoid or tanh
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Activation {
     Relu { leak: f32 },
@@ -14,8 +14,8 @@ impl Operation for Activation {
         assert_eq!(inputs.len(), 1, "Activation accepts one input");
         match self {
             Activation::Relu { leak } => inputs[0].mapv(|x| if x > 0.0 { x } else { x * leak }),
-            Activation::Sigmoid => inputs[0].mapv(|x| sig(x)),
-            Activation::Tanh => inputs[0].mapv(|x| x.tanh()),
+            Activation::Sigmoid => inputs[0].mapv(sig),
+            Activation::Tanh => inputs[0].mapv(f32::tanh),
         }
     }
     fn grad(&self, inputs: &[ArrayViewD<f32>], loss: ArrayViewD<f32>) -> Vec<ArrayD<f32>> {

@@ -1,29 +1,30 @@
 //! # ∂rug - Differentiable Rust Graph
 //!
 //! This crate is a collection of utilities to build build neural networks (differentiable
-//! programs). See [examples source code](https://github.com/CasperN/drug/tree/master/examples)
+//! programs). See [examples](https://github.com/CasperN/drug/tree/master/examples)
 //! for implementations of canonical neural networks. You may need to download those datasets
 //! yourself to use them. Examples include:
 //! * Mnist with dense networks
 //! * Mnist with convolutional neural networks (though embarassingly slowly)
 //! * Penn TreeBank character prediction with RNN and GRU
 //!
-//! ### Planned Changes
-//! * Building complexes of nodes (conv + bias + relu) / RNN cells, with parameter reuse
-//! * Subgraphs / updating subsets of graphs (e.g. for GAN)
+//! ### Planned Future Features
+//! * Higher level API
+//!     * Building complexes of nodes (conv + bias + relu) / RNN cells, with parameter reuse
+//!     * Subgraphs / updating subsets of graphs (e.g. for GAN) with separate optimizers
 //! * Parallel backprop multiple arguments of 1 node
-//! * ndarray-parallel usage
+//! * ndarray-parallel or OpenMPI for graph replication and parallelization
+//! * Link to some optimized OpenCL maths backend for GPU utilization
 //!
 //! Reinforcement learning applications may also challenge the archiecture but I don't understand
 //! the process well enough yet to consider adding it to the library.
 //!
 //! ### Wish list
-//! * GPU integration (awaiting advancements in rust gp-gpu)
 //! * Operator overloading API + Taking advantage of the type system and const generics
 //!     * May require total overhaul.. or may be possible with a "Graph Cursor" trait and more
 //!     sophisticaed handles beyond current Idxs
 //! * Automatic differentiation of operations defined only from loops (proc macros?)
-//! * Distributed training
+//! * Taking advantage of just in time compilation and fusion of operations / kernels
 //! * Other kinds of derivatives e.g. jacobian
 
 #![feature(test)]
@@ -43,16 +44,17 @@ extern crate serde;
 #[macro_use(iproduct)]
 extern crate itertools;
 
-// pub use ndarray;
 use ndarray::prelude::*;
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 
 mod graph;
 pub mod nodes;
-pub use nodes::{GlobalPool, Operation, Padding};
-pub mod optimizers;
+mod optimizers;
+
 pub use graph::*;
+pub use nodes::{GlobalPool, Operation, Padding};
+pub use optimizers::Optimizer;
 
 // TODO initializers file
 /// The default (and only provided) initializer. Only works with convolution kernels and matrices.
@@ -71,7 +73,7 @@ pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
 }
 
 /// Take the softmax of an array of shape `batch_size * num_classes`
-pub fn softmax(logits: ArrayViewD<f32>) -> Array2<f32> {
+pub fn softmax(logits: &ArrayD<f32>) -> Array2<f32> {
     let mut softmax = logits.to_owned().into_dimensionality::<Ix2>().unwrap();
     // Calculate softmax
     let max = softmax.fold_axis(Axis(1), 0.0, |x, y| if *x > *y { *x } else { *y });
@@ -90,7 +92,7 @@ pub fn softmax(logits: ArrayViewD<f32>) -> Array2<f32> {
 /// `logits` are a `batch_size * num_classes` array of values which will be compressed into the
 /// `[0,1]` range by a softmax operation. Given the correct categories `labels`, this function will
 /// calculate the negative log-probability of the logits and its gradient with respect to the logits.
-pub fn softmax_cross_entropy_loss(logits: ArrayViewD<f32>, labels: &[usize]) -> (f32, ArrayD<f32>) {
+pub fn softmax_cross_entropy_loss(logits: &ArrayD<f32>, labels: &[usize]) -> (f32, ArrayD<f32>) {
     let mut softmax = softmax(logits);
     let mut log_loss = 0.0;
     // Turn softmax into gradient and add up log_loss
@@ -130,7 +132,7 @@ mod libc {
                 0.6652409557748219,
             ],
         ]);
-        let softmax = softmax(logits.view().into_dyn());
+        let softmax = softmax(&logits.into_dyn());
         for i in 0..2 {
             for j in 0..3 {
                 assert!((softmax[(i, j)] - correct[(i, j)]).abs() < f32::EPSILON);

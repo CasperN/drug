@@ -40,7 +40,7 @@ impl BeamSearch {
     ) -> (Vec<ArrayD<f32>>, ArrayD<f32>) {
         let mut b = 0;
         let mut top = HashMap::new();
-        let probs = softmax(logits.into_dyn().mapv(|x| x / temperature).view());
+        let probs = softmax(&logits.into_dyn().mapv(|x| x / temperature));
 
         while top.len() < self.width {
             let codes = weighted_sample(probs.slice(s!(b, ..)), 1);

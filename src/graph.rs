@@ -119,32 +119,31 @@ impl Graph {
         self.set_value(idx, c);
         idx
     }
-    fn _forward1(&mut self, i: &usize) {
+    fn _forward1(&mut self, i: usize) {
         if let Some(n) = self.nodes.get_mut(&i) {
             let inps = n.inputs();
             if let Some(v) = n.forward(&view_at_idxs(&inps, &self.values)) {
-                self.values.insert(*i, v);
+                self.values.insert(i, v);
             }
         }
         // reset losses
-        self.losses.insert(*i, Array::zeros(self.values[i].shape()));
+        self.losses.insert(i, Array::zeros(self.values[&i].shape()));
     }
-    fn _backward1(&mut self, i: &usize) {
+    fn _backward1(&mut self, i: usize) {
         if let Some(n) = self.nodes.get_mut(&i) {
             if let Node::Parameter(..) = n {
                 self.optimizer.apply_gradient(
-                    &Idx { idx: *i },
-                    self.values.get_mut(i).unwrap().view_mut(),
-                    self.losses[&i].view(),
+                    Idx { idx: i },
+                    self.values.get_mut(&i).unwrap().view_mut(),
+                    &self.losses[&i],
                 );
             } else {
                 let inps = n.inputs();
-                let gradients = n.backward(
-                    &view_at_idxs(&inps, &self.values),
-                    self.losses.get(&i).unwrap().view(),
-                );
+                let gradients = n.backward(&view_at_idxs(&inps, &self.values), &self.losses[&i]);
                 for (grad, j) in gradients.iter().zip(inps.iter()) {
-                    self.losses.get_mut(&j.idx).map(|x| *x += grad);
+                    if let Some(x) = self.losses.get_mut(&j.idx) {
+                        *x += grad;
+                    }
                 }
             }
         }
@@ -154,8 +153,8 @@ impl Graph {
     /// Inputs will set their value to the next output of their iterator,
     /// Operations will compute a new value based on the values of its inputs.
     pub fn forward(&mut self) {
-        let keys: Vec<usize> = self.nodes.keys().map(|x| *x).collect();
-        for i in keys.iter() {
+        let keys: Vec<usize> = self.nodes.keys().rev().cloned().collect();
+        for i in keys.into_iter() {
             self._forward1(i);
         }
     }
@@ -164,18 +163,18 @@ impl Graph {
     /// Inputs are unaffected
     /// Operations will compute gradient given values from their inputs and gradients from its outputs
     pub fn backward(&mut self) {
-        let keys: Vec<usize> = self.nodes.keys().rev().map(|x| *x).collect();
-        for i in keys.iter() {
+        let keys: Vec<usize> = self.nodes.keys().rev().cloned().collect();
+        for i in keys.into_iter() {
             self._backward1(i);
         }
     }
     /// Updates value and resets losses for node with Idx `i`.
     pub fn forward1(&mut self, i: Idx) {
-        self._forward1(&i.idx);
+        self._forward1(i.idx);
     }
     /// Back propagates losses for node with Idx `i`.
     pub fn backward1(&mut self, i: Idx) {
-        self._backward1(&i.idx);
+        self._backward1(i.idx);
     }
     /// Remove the node at `idx` as well as its associated value and loss.
     pub fn remove(&mut self, idx: Idx) {
@@ -202,23 +201,23 @@ impl Graph {
         }
     }
     pub fn set_value(&mut self, idx: Idx, val: ArrayD<f32>) {
-        if let None = self.values.insert(idx.idx, val) {
+        if self.values.insert(idx.idx, val).is_none() {
             panic!("Tried to set value at a removed index")
         }
     }
-    pub fn get_value(&self, idx: Idx) -> ArrayViewD<f32> {
-        self.values[&idx.idx].view()
+    pub fn get_value(&self, idx: Idx) -> &ArrayD<f32> {
+        &self.values[&idx.idx]
     }
     pub fn set_loss(&mut self, idx: Idx, loss: ArrayD<f32>) {
-        if let None = self.losses.insert(idx.idx, loss) {
+        if self.losses.insert(idx.idx, loss).is_none() {
             panic!("Tried to set loss at a removed index")
         }
     }
-    pub fn get_loss(&self, idx: Idx) -> ArrayViewD<f32> {
-        self.losses[&idx.idx].view()
+    pub fn get_loss(&self, idx: Idx) -> &ArrayD<f32> {
+        &self.losses[&idx.idx]
     }
     /// Replace an Input node's iterator or converts Constant nodes into Input with this iterator.
-    /// WARNING this prevents saving with serde (boxed iterator). Constants should be used instead.
+    /// Note that Input node iterators are not saved when serialized with serde.
     pub fn replace_input_iterator(
         &mut self,
         idx: Idx,
@@ -293,7 +292,7 @@ impl Graph {
 }
 
 fn view_at_idxs<'a>(
-    indices: &Vec<Idx>,
+    indices: &[Idx],
     nodes: &'a BTreeMap<usize, ArrayD<f32>>,
 ) -> Box<[ArrayViewD<'a, f32>]> {
     let mut vals = Vec::new();
