@@ -26,13 +26,6 @@ struct OptimizerInstance {
 /// |---|---|---|
 /// |**no `beta_magnitude`** |vanilla SGD |     SGD with momentum
 /// |**`beta_magnitude`** |   RMSProp |         Adam
-// IDEA/TODO
-// * Replace optimizer trait with this!
-// * Builder?
-// * Components
-//     * Adadelta auto LR with RMS(param) / RMS(grad)
-//     * Adamax {L1, L2, Max}-Norm for magnitude component
-//     * don't do Nesterov accleration b/c needs graph ownership for lookahead?
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Optimizer {
     pub learning_rate: f32,

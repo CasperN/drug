@@ -294,7 +294,7 @@ mod tests {
         );
     }
 
-    // #[test] TODO
+    // #[test] TODO test no_padding
     // fn conv_point_no_padding() {
     //     unimplemented!()
     // }

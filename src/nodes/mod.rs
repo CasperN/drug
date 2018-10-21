@@ -138,7 +138,7 @@ impl Node {
     }
 }
 
-// TODO figure out serialization and deserialization of operations
+// TODO figure out serialization and deserialization of Boxed traits. This may not be possible :/
 impl Default for Box<Operation> {
     fn default() -> Self {
         Box::new(arithmetic::Add())

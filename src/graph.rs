@@ -18,6 +18,8 @@ pub struct Idx {
 /// `forward` method) and propagates losses backwards in reverse insertion order (see `backward`
 /// method). The default graph comes with an xavier initializer and a vanilla stochastic gradient
 /// descent optimizer.
+// QUESTION why not Option<Optimizer>, Option<Initializer>?, even Option<losses>
+// TODO losses should be renamed gradients to be more descriptive
 #[derive(DebugStub, Serialize, Deserialize)]
 pub struct Graph {
     nodes: BTreeMap<usize, Node>,
@@ -106,7 +108,7 @@ impl Graph {
     }
     /// Registers an operation and its inputs
     pub fn op(&mut self, op: impl Operation + 'static, inputs: &[Idx]) -> Idx {
-        // TODO Verify inputs
+        // TODO Verify Operation inputs -- make sure they're in the graph
         let o = Node::Operation {
             operation: Box::new(op),
             inputs: inputs.to_vec().into_boxed_slice(),

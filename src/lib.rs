@@ -26,6 +26,7 @@
 //! * Automatic differentiation of operations defined only from loops (proc macros?)
 //! * Taking advantage of just in time compilation and fusion of operations / kernels
 //! * Other kinds of derivatives e.g. jacobian
+// TODO Consider greping for unwrap, expect, panic, assert, and replacing signatures with results.
 
 #![feature(test)]
 #[macro_use]
@@ -56,7 +57,7 @@ pub use graph::*;
 pub use nodes::{GlobalPool, Operation, Padding};
 pub use optimizers::Optimizer;
 
-// TODO initializers file
+// TODO initializers file, maybe initializers enum so they're serializable
 /// The default (and only provided) initializer. Only works with convolution kernels and matrices.
 pub fn xavier_initialize(shape: &[usize]) -> ArrayD<f32> {
     // let len: usize = shape.iter().product();
