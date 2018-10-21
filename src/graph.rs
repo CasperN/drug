@@ -155,7 +155,7 @@ impl Graph {
     /// Inputs will set their value to the next output of their iterator,
     /// Operations will compute a new value based on the values of its inputs.
     pub fn forward(&mut self) {
-        let keys: Vec<usize> = self.nodes.keys().rev().cloned().collect();
+        let keys: Vec<usize> = self.nodes.keys().cloned().collect();
         for i in keys.into_iter() {
             self._forward1(i);
         }

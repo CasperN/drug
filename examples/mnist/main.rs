@@ -127,16 +127,14 @@ fn main() {
         }
     }
     // old input node exhausted, refresh with test images
-    let mut test_images = reshape_and_iter(&test_images, batch_size, use_dense);
-    // FIXME Input Nodes prevent saving
-    // g.replace_input_iterator(imgs, test_images).unwrap();
+    let test_images = reshape_and_iter(&test_images, batch_size, use_dense);
+    g.replace_input_iterator(imgs, test_images).unwrap();
 
     let test_steps = TS_LEN as usize / batch_size;
     let mut num_correct = 0;
 
     println!("Testing...");
     for step in 0..test_steps {
-        g.set_value(imgs, test_images.next().unwrap());
         g.forward();
         let labels = &test_labels[step * batch_size..(step + 1) * batch_size];
         num_correct += count_correct(&g.get_value(out), labels);

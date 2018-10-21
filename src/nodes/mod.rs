@@ -119,11 +119,7 @@ impl Node {
             Node::Parameter(..) | Node::Constant => None,
         }
     }
-    pub fn backward(
-        &self,
-        inputs: &[ArrayViewD<f32>],
-        loss: &ArrayD<f32>, // &ArrayD<f32>
-    ) -> Vec<ArrayD<f32>> {
+    pub fn backward(&self, inputs: &[ArrayViewD<f32>], loss: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         match self {
             Node::Conv { conv, .. } => conv.grad(inputs, loss.view()),
             Node::Add { .. } => Add().grad(inputs, loss.view()),
