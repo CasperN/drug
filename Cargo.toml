@@ -7,7 +7,7 @@ repository = "https://github.com/CasperN/drug"
 description = "A differentiable computation graph for neural networks."
 readme = "readme.md"
 keywords = ["differentiable", "neural", "network", "compuation", "graph"]
-categories = ["Science"]
+categories = ["science"]
 exclude = ["examples/data/*", "doc/**/*.html"]
 # publish = false
 
